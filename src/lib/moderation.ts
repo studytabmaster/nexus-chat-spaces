@@ -33,7 +33,7 @@ export async function moderateMember(input: {
     _user_id: input.userId,
     _action: input.action,
     _reason: input.reason ?? "",
-    _minutes: input.minutes ?? null,
+    _minutes: input.minutes ?? undefined,
   });
   if (error) throw error;
 }

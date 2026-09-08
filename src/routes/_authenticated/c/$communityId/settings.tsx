@@ -186,10 +186,8 @@ function GeneralSettings({ communityId }: { communityId: string }) {
   const uploadImage = useMutation({
     mutationFn: async ({ file, kind }: { file: File; kind: "icon_url" | "banner_url" }) => {
       const path = await uploadFile(me.data!.id, file);
-      const { error } = await supabase
-        .from("communities")
-        .update({ [kind]: path })
-        .eq("id", communityId);
+      const patch = kind === "icon_url" ? { icon_url: path } : { banner_url: path };
+      const { error } = await supabase.from("communities").update(patch).eq("id", communityId);
       if (error) throw error;
     },
     onSuccess: () => {
