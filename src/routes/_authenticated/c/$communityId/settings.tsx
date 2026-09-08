@@ -1,0 +1,626 @@
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
+import { toast } from "sonner";
+import { Settings, Plus, Trash2, Check, X, UserPlus, Shield, Hash, Copy, Link2, Sparkles, Smile } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { communityQuery, channelsQuery, membersQuery } from "@/lib/queries";
+import { useMembership } from "@/components/app/JoinButton";
+import { CommunityIcon } from "@/components/app/CommunityIcon";
+import { UserAvatar } from "@/components/app/UserAvatar";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { PageHeader } from "@/components/app/PageHeader";
+import { EmptyState, ErrorState, LoadingState } from "@/components/app/EmptyState";
+import { CATEGORIES } from "@/lib/constants";
+import { Switch } from "@/components/ui/switch";
+import { welcomeQuery, invitesQuery, emojisQuery, inviteCode, inviteUrl } from "@/lib/community-extras";
+import { EmojiImage } from "@/components/app/CustomEmoji";
+import { uploadFile } from "@/lib/storage";
+import { useMe } from "@/lib/auth";
+import { shortDate } from "@/lib/format";
+
+export const Route = createFileRoute("/_authenticated/c/$communityId/settings")({
+  head: () => ({
+    meta: [
+      { title: "Community Settings — Nexa" },
+      { name: "description", content: "コミュニティの設定と管理。" },
+      { property: "og:title", content: "Community Settings — Nexa" },
+      { property: "og:description", content: "コミュニティの設定と管理。" },
+    ],
+  }),
+  component: CommunitySettingsPage,
+});
+
+function CommunitySettingsPage() {
+  const { communityId } = Route.useParams();
+  const membership = useMembership(communityId);
+  const role = membership.data?.role;
+  const canManage = role === "owner" || role === "admin";
+
+  if (membership.isLoading) return <LoadingState />;
+  if (!canManage) {
+    return (
+      <div className="p-8">
+        <EmptyState icon={Shield} title="権限がありません" body="コミュニティの設定は owner / admin のみ変更できます。" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="h-full overflow-y-auto">
+      <div className="mx-auto max-w-4xl px-4 py-6 md:px-8">
+        <PageHeader title="Community Settings" subtitle="コミュニティの管理" />
+        <Tabs defaultValue="general">
+          <TabsList className="mb-4 flex-wrap">
+            <TabsTrigger value="general">基本設定</TabsTrigger>
+            <TabsTrigger value="channels">チャンネル</TabsTrigger>
+            <TabsTrigger value="requests">参加申請</TabsTrigger>
+            <TabsTrigger value="members">メンバー</TabsTrigger>
+            <TabsTrigger value="welcome">ウェルカム</TabsTrigger>
+            <TabsTrigger value="invites">招待リンク</TabsTrigger>
+            <TabsTrigger value="emojis">絵文字</TabsTrigger>
+          </TabsList>
+          <TabsContent value="general">
+            <GeneralSettings communityId={communityId} />
+          </TabsContent>
+          <TabsContent value="channels">
+            <ChannelManager communityId={communityId} />
+          </TabsContent>
+          <TabsContent value="requests">
+            <JoinRequests communityId={communityId} />
+          </TabsContent>
+          <TabsContent value="members">
+            <MemberManager communityId={communityId} />
+          </TabsContent>
+          <TabsContent value="welcome">
+            <WelcomeSettings communityId={communityId} />
+          </TabsContent>
+          <TabsContent value="invites">
+            <InviteManager communityId={communityId} />
+          </TabsContent>
+          <TabsContent value="emojis">
+            <EmojiManager communityId={communityId} />
+          </TabsContent>
+        </Tabs>
+      </div>
+    </div>
+  );
+}
+
+function GeneralSettings({ communityId }: { communityId: string }) {
+  const qc = useQueryClient();
+  const community = useQuery(communityQuery(communityId));
+  const [form, setForm] = useState<{
+    name: string;
+    description: string;
+    category: string;
+    visibility: "PUBLIC" | "UNLISTED" | "PRIVATE";
+    join_policy: "open" | "request";
+  }>({
+    name: community.data?.name ?? "",
+    description: community.data?.description ?? "",
+    category: community.data?.category ?? CATEGORIES[1],
+    visibility: community.data?.visibility ?? "PUBLIC",
+    join_policy: community.data?.join_policy ?? "open",
+  });
+
+  const update = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase
+        .from("communities")
+        .update({
+          name: form.name.trim(),
+          description: form.description.trim(),
+          category: form.category,
+          visibility: form.visibility,
+          join_policy: form.join_policy,
+        })
+        .eq("id", communityId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("コミュニティを更新しました");
+      qc.invalidateQueries({ queryKey: ["community", communityId] });
+      qc.invalidateQueries({ queryKey: ["communities"] });
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  if (community.isLoading) return <LoadingState />;
+  if (community.isError) return <ErrorState message={community.error.message} onRetry={() => community.refetch()} />;
+  if (!community.data) return <EmptyState icon={Settings} title="コミュニティが見つかりません" />;
+
+  return (
+    <div className="space-y-4 rounded-2xl border bg-card p-6">
+      <div className="flex items-center gap-4">
+        <CommunityIcon id={community.data.id} name={community.data.name} iconUrl={community.data.icon_url} className="size-16 text-xl" />
+        <div>
+          <p className="font-semibold">{community.data.name}</p>
+          <p className="text-sm text-muted-foreground">{community.data.member_count} メンバー</p>
+        </div>
+      </div>
+      <div className="space-y-1.5">
+        <Label>名前</Label>
+        <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+      </div>
+      <div className="space-y-1.5">
+        <Label>説明</Label>
+        <Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={3} />
+      </div>
+      <div className="grid gap-4 md:grid-cols-3">
+        <div className="space-y-1.5">
+          <Label>カテゴリー</Label>
+          <Select value={form.category} onValueChange={(v) => setForm({ ...form, category: v })}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {CATEGORIES.filter((c) => c !== "すべて").map((c) => (
+                <SelectItem key={c} value={c}>
+                  {c}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+            <div className="space-y-1.5">
+              <Label>公開範囲</Label>
+              <Select value={form.visibility} onValueChange={(v) => setForm({ ...form, visibility: v as "PUBLIC" | "UNLISTED" | "PRIVATE" })}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="PUBLIC">PUBLIC</SelectItem>
+                  <SelectItem value="UNLISTED">UNLISTED</SelectItem>
+                  <SelectItem value="PRIVATE">PRIVATE</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>参加方法</Label>
+              <Select value={form.join_policy} onValueChange={(v) => setForm({ ...form, join_policy: v as "open" | "request" })}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="open">open</SelectItem>
+                  <SelectItem value="request">request</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+      </div>
+      <Button onClick={() => update.mutate()} disabled={update.isPending}>
+        保存
+      </Button>
+    </div>
+  );
+}
+
+function ChannelManager({ communityId }: { communityId: string }) {
+  const qc = useQueryClient();
+  const channels = useQuery(channelsQuery(communityId));
+  const [newChan, setNewChan] = useState("");
+  const [newCat, setNewCat] = useState("");
+
+  const createChannel = useMutation({
+    mutationFn: async () => {
+      const pos = (channels.data?.channels.length ?? 0) + 1;
+      const { error } = await supabase.from("channels").insert({
+        community_id: communityId,
+        name: newChan.trim(),
+        type: "text",
+        position: pos,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("チャンネルを作成しました");
+      setNewChan("");
+      qc.invalidateQueries({ queryKey: ["channels", communityId] });
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const createCategory = useMutation({
+    mutationFn: async () => {
+      const pos = (channels.data?.categories.length ?? 0) + 1;
+      const { error } = await supabase.from("categories").insert({ community_id: communityId, name: newCat.trim(), position: pos });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("カテゴリーを作成しました");
+      setNewCat("");
+      qc.invalidateQueries({ queryKey: ["channels", communityId] });
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const removeChannel = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("channels").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["channels", communityId] }),
+    onError: (e) => toast.error(e.message),
+  });
+
+  if (channels.isLoading) return <LoadingState />;
+  if (channels.isError) return <ErrorState message={channels.error.message} onRetry={() => channels.refetch()} />;
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-2xl border bg-card p-6">
+        <h3 className="mb-3 font-semibold">新しいチャンネル</h3>
+        <div className="flex gap-2">
+          <Input value={newChan} onChange={(e) => setNewChan(e.target.value)} placeholder="チャンネル名" />
+          <Button onClick={() => createChannel.mutate()} disabled={!newChan.trim() || createChannel.isPending}>
+            <Plus className="size-4" />
+          </Button>
+        </div>
+      </div>
+      <div className="rounded-2xl border bg-card p-6">
+        <h3 className="mb-3 font-semibold">新しいカテゴリー</h3>
+        <div className="flex gap-2">
+          <Input value={newCat} onChange={(e) => setNewCat(e.target.value)} placeholder="カテゴリー名" />
+          <Button onClick={() => createCategory.mutate()} disabled={!newCat.trim() || createCategory.isPending}>
+            <Plus className="size-4" />
+          </Button>
+        </div>
+      </div>
+      <div className="space-y-2">
+        {channels.data?.channels.map((ch) => (
+          <div key={ch.id} className="flex items-center justify-between rounded-xl border bg-card p-3">
+            <span className="flex items-center gap-2">
+              <Hash className="size-4 text-muted-foreground" /> {ch.name}
+            </span>
+            <button onClick={() => removeChannel.mutate(ch.id)} className="text-muted-foreground hover:text-destructive" aria-label="削除">
+              <Trash2 className="size-4" />
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function JoinRequests({ communityId }: { communityId: string }) {
+  const qc = useQueryClient();
+  const requests = useQuery({
+    queryKey: ["join-requests", communityId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("join_requests")
+        .select("*, profile:profiles(*)")
+        .eq("community_id", communityId)
+        .eq("status", "PENDING")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const decide = useMutation({
+    mutationFn: async ({ id, approve }: { id: string; approve: boolean }) => {
+      const { error } = await supabase.from("join_requests").update({ status: approve ? "APPROVED" : "REJECTED" }).eq("id", id);
+      if (error) throw error;
+      if (approve) {
+        const req = requests.data?.find((r) => r.id === id);
+        if (req) {
+          const { error: addError } = await supabase
+            .from("community_members")
+            .insert({ community_id: communityId, user_id: req.user_id, role: "member" });
+          if (addError) throw addError;
+        }
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["join-requests", communityId] });
+      qc.invalidateQueries({ queryKey: ["members", communityId] });
+      qc.invalidateQueries({ queryKey: ["communities"] });
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  if (requests.isLoading) return <LoadingState />;
+  if (requests.isError) return <ErrorState message={requests.error.message} onRetry={() => requests.refetch()} />;
+
+  return (
+    <div className="space-y-2">
+      {requests.data?.length === 0 && (
+        <EmptyState icon={UserPlus} title="参加申請はありません" body="新しい申請が届くとここに表示されます。" />
+      )}
+      {requests.data?.map((r) => (
+        <div key={r.id} className="rounded-xl border bg-card p-4">
+          <div className="flex items-start gap-3">
+            <UserAvatar name={r.profile.display_name} avatarUrl={r.profile.avatar_url} />
+            <div className="min-w-0 flex-1">
+              <p className="font-semibold">{r.profile.display_name}</p>
+              <p className="text-sm text-muted-foreground">{r.message || "メッセージはありません"}</p>
+            </div>
+          </div>
+          <div className="mt-3 flex justify-end gap-2">
+            <Button size="sm" variant="secondary" onClick={() => decide.mutate({ id: r.id, approve: false })}>
+              <X className="mr-1 size-3.5" /> 拒否
+            </Button>
+            <Button size="sm" onClick={() => decide.mutate({ id: r.id, approve: true })}>
+              <Check className="mr-1 size-3.5" /> 承認
+            </Button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function MemberManager({ communityId }: { communityId: string }) {
+  const members = useQuery(membersQuery(communityId));
+
+  if (members.isLoading) return <LoadingState />;
+  if (members.isError) return <ErrorState message={members.error.message} onRetry={() => members.refetch()} />;
+
+  return (
+    <div className="space-y-2">
+      {members.data?.map((m) => (
+        <Link
+          key={m.id}
+          to="/u/$userId"
+          params={{ userId: m.user_id }}
+          className="flex items-center justify-between rounded-xl border bg-card p-3 hover:bg-surface-hover"
+        >
+          <span className="flex items-center gap-3">
+            <UserAvatar name={m.profile.display_name} avatarUrl={m.profile.avatar_url} />
+            <span className="font-medium">{m.profile.display_name}</span>
+          </span>
+          <span className="text-sm text-muted-foreground">{m.role}</span>
+        </Link>
+      ))}
+    </div>
+  );
+}
+
+function WelcomeSettings({ communityId }: { communityId: string }) {
+  const qc = useQueryClient();
+  const welcome = useQuery(welcomeQuery(communityId));
+  const [form, setForm] = useState<{ enabled: boolean; title: string; body: string; rules: string } | null>(null);
+  const value =
+    form ?? {
+      enabled: welcome.data?.enabled ?? true,
+      title: welcome.data?.title ?? "",
+      body: welcome.data?.body ?? "",
+      rules: (welcome.data?.rules ?? []).join("\n"),
+    };
+
+  const save = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase.from("community_welcome").upsert(
+        {
+          community_id: communityId,
+          enabled: value.enabled,
+          title: value.title.trim(),
+          body: value.body.trim(),
+          rules: value.rules
+            .split("\n")
+            .map((r) => r.trim())
+            .filter(Boolean),
+        },
+        { onConflict: "community_id" },
+      );
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("ウェルカム画面を保存しました");
+      qc.invalidateQueries({ queryKey: ["welcome", communityId] });
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  if (welcome.isLoading) return <LoadingState />;
+
+  return (
+    <div className="space-y-4 rounded-2xl border bg-card p-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="flex items-center gap-2 font-semibold">
+            <Sparkles className="size-4 text-primary" /> ウェルカム画面を表示
+          </p>
+          <p className="text-sm text-muted-foreground">初めてコミュニティを開いたメンバーに表示されます。</p>
+        </div>
+        <Switch checked={value.enabled} onCheckedChange={(v) => setForm({ ...value, enabled: v })} />
+      </div>
+      <div className="space-y-1.5">
+        <Label>見出し</Label>
+        <Input value={value.title} onChange={(e) => setForm({ ...value, title: e.target.value })} placeholder="ようこそ！" />
+      </div>
+      <div className="space-y-1.5">
+        <Label>案内文</Label>
+        <Textarea value={value.body} onChange={(e) => setForm({ ...value, body: e.target.value })} rows={4} />
+      </div>
+      <div className="space-y-1.5">
+        <Label>ルール（1行に1つ）</Label>
+        <Textarea value={value.rules} onChange={(e) => setForm({ ...value, rules: e.target.value })} rows={4} />
+      </div>
+      <Button onClick={() => save.mutate()} disabled={save.isPending}>
+        保存
+      </Button>
+    </div>
+  );
+}
+
+function InviteManager({ communityId }: { communityId: string }) {
+  const qc = useQueryClient();
+  const me = useMe();
+  const invites = useQuery(invitesQuery(communityId));
+  const [maxUses, setMaxUses] = useState("");
+  const [days, setDays] = useState("");
+
+  const create = useMutation({
+    mutationFn: async () => {
+      const expires = days ? new Date(Date.now() + Number(days) * 86400000).toISOString() : null;
+      const { error } = await supabase.from("invites").insert({
+        community_id: communityId,
+        code: inviteCode(),
+        created_by: me.data!.id,
+        max_uses: maxUses ? Number(maxUses) : null,
+        expires_at: expires,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("招待リンクを作成しました");
+      setMaxUses("");
+      setDays("");
+      qc.invalidateQueries({ queryKey: ["invites", communityId] });
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const revoke = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("invites").update({ revoked: true }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["invites", communityId] }),
+    onError: (e) => toast.error(e.message),
+  });
+
+  if (invites.isLoading) return <LoadingState />;
+  if (invites.isError) return <ErrorState message={invites.error.message} onRetry={() => invites.refetch()} />;
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-2xl border bg-card p-6">
+        <h3 className="mb-3 font-semibold">新しい招待リンク</h3>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div className="space-y-1.5">
+            <Label>使用回数の上限（空欄=無制限）</Label>
+            <Input value={maxUses} onChange={(e) => setMaxUses(e.target.value.replace(/\D/g, ""))} inputMode="numeric" placeholder="無制限" />
+          </div>
+          <div className="space-y-1.5">
+            <Label>有効期限（日数・空欄=無期限）</Label>
+            <Input value={days} onChange={(e) => setDays(e.target.value.replace(/\D/g, ""))} inputMode="numeric" placeholder="無期限" />
+          </div>
+          <div className="flex items-end">
+            <Button onClick={() => create.mutate()} disabled={create.isPending} className="w-full">
+              <Plus className="mr-1 size-4" /> 作成
+            </Button>
+          </div>
+        </div>
+      </div>
+      {invites.data?.length === 0 && <EmptyState icon={Link2} title="招待リンクはありません" body="リンクを作ってメンバーを招待しましょう。" />}
+      <div className="space-y-2">
+        {invites.data?.map((i) => (
+          <div key={i.id} className="flex flex-wrap items-center gap-2 rounded-xl border bg-card p-3">
+            <code className="rounded bg-muted px-2 py-1 text-sm">{inviteUrl(i.code)}</code>
+            <span className="text-xs text-muted-foreground">
+              {i.uses} 回使用{i.max_uses ? ` / 上限 ${i.max_uses}` : ""}
+              {i.expires_at ? ` ・ ${shortDate(i.expires_at)} まで` : ""}
+              {i.revoked ? " ・ 無効" : ""}
+            </span>
+            <div className="ml-auto flex gap-1">
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => {
+                  navigator.clipboard.writeText(inviteUrl(i.code));
+                  toast.success("リンクをコピーしました");
+                }}
+              >
+                <Copy className="mr-1 size-3.5" /> コピー
+              </Button>
+              {!i.revoked && (
+                <Button size="sm" variant="ghost" onClick={() => revoke.mutate(i.id)}>
+                  無効化
+                </Button>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function EmojiManager({ communityId }: { communityId: string }) {
+  const qc = useQueryClient();
+  const me = useMe();
+  const emojis = useQuery(emojisQuery(communityId));
+  const [name, setName] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+
+  const add = useMutation({
+    mutationFn: async () => {
+      if (!file) throw new Error("画像を選択してください");
+      const path = await uploadFile(me.data!.id, file);
+      const { error } = await supabase.from("custom_emojis").insert({
+        community_id: communityId,
+        name: name.trim().toLowerCase().replace(/[^a-z0-9_]/g, "_"),
+        image_url: path,
+        created_by: me.data!.id,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("絵文字を追加しました");
+      setName("");
+      setFile(null);
+      qc.invalidateQueries({ queryKey: ["custom-emojis", communityId] });
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const remove = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("custom_emojis").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["custom-emojis", communityId] }),
+    onError: (e) => toast.error(e.message),
+  });
+
+  if (emojis.isLoading) return <LoadingState />;
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-2xl border bg-card p-6">
+        <h3 className="mb-3 font-semibold">カスタム絵文字を追加</h3>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div className="space-y-1.5">
+            <Label>名前（半角英数字）</Label>
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="party" />
+          </div>
+          <div className="space-y-1.5">
+            <Label>画像</Label>
+            <Input type="file" accept="image/*" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+          </div>
+          <div className="flex items-end">
+            <Button className="w-full" onClick={() => add.mutate()} disabled={!name.trim() || !file || add.isPending}>
+              <Plus className="mr-1 size-4" /> 追加
+            </Button>
+          </div>
+        </div>
+        <p className="mt-2 text-xs text-muted-foreground">チャットで :名前: と入力すると絵文字として表示されます。</p>
+      </div>
+      {emojis.data?.length === 0 ? (
+        <EmptyState icon={Smile} title="カスタム絵文字はありません" body="コミュニティ独自の絵文字を追加できます。" />
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          {emojis.data?.map((e) => (
+            <div key={e.id} className="flex items-center gap-2 rounded-xl border bg-card px-3 py-2">
+              <EmojiImage emoji={e} className="size-6" />
+              <span className="text-sm">:{e.name}:</span>
+              <button onClick={() => remove.mutate(e.id)} className="text-muted-foreground hover:text-destructive" aria-label="削除">
+                <Trash2 className="size-4" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
