@@ -34,6 +34,7 @@ import { UserAvatar } from "./UserAvatar";
 import { CustomEmojiPicker, EmojiImage, renderEmojiParts } from "./CustomEmoji";
 import { useCustomEmojis, type CustomEmoji as Emoji } from "@/lib/community-extras";
 import { PollCard, CreatePollDialog } from "./PollCard";
+import { ReportDialog } from "./ReportDialog";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -189,6 +190,7 @@ export function ChatView({
   const [file, setFile] = useState<File | null>(null);
   const [showPinned, setShowPinned] = useState(false);
   const [sheetMessage, setSheetMessage] = useState<ChatMessage | null>(null);
+  const [reportTarget, setReportTarget] = useState<ChatMessage | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const longPress = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -693,6 +695,18 @@ export function ChatView({
           )}
         </SheetContent>
       </Sheet>
+
+      {reportTarget && (
+        <ReportDialog
+          open
+          onOpenChange={(o) => !o && setReportTarget(null)}
+          targetType="message"
+          targetId={reportTarget.id}
+          communityId={source.kind === "channel" ? source.communityId : null}
+          link={linkBase}
+          preview={`${reportTarget.author?.display_name ?? ""}: ${reportTarget.content?.slice(0, 120) ?? ""}`}
+        />
+      )}
 
       <div className="shrink-0 border-t bg-background p-3">
         {!canPost ? (
