@@ -346,7 +346,7 @@ export function ChatView({
   }
 
   function report(m: ChatMessage) {
-    toast.success(`通報を送信しました（${m.author?.display_name ?? "ユーザー"}）`);
+    setReportTarget(m);
   }
 
   function onKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
