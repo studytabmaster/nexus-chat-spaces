@@ -16,16 +16,25 @@ export function ReportDialog({
   communityId,
   link,
   preview,
+  open: openProp,
+  onOpenChange,
 }: {
-  trigger: ReactNode;
+  trigger?: ReactNode;
   targetType: "message" | "user" | "community";
   targetId: string;
   communityId?: string | null;
   link?: string | null;
   preview?: string;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
   const me = useMe();
-  const [open, setOpen] = useState(false);
+  const [openState, setOpenState] = useState(false);
+  const open = openProp ?? openState;
+  const setOpen = (v: boolean) => {
+    setOpenState(v);
+    onOpenChange?.(v);
+  };
   const [reason, setReason] = useState<ReportReason>("spam");
   const [detail, setDetail] = useState("");
 
