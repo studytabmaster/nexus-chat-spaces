@@ -117,6 +117,7 @@ function CommunitySettingsPage() {
 
 function GeneralSettings({ communityId }: { communityId: string }) {
   const qc = useQueryClient();
+  const me = useMe();
   const community = useQuery(communityQuery(communityId));
   const [form, setForm] = useState<{
     name: string;
@@ -124,12 +125,14 @@ function GeneralSettings({ communityId }: { communityId: string }) {
     category: string;
     visibility: "PUBLIC" | "UNLISTED" | "PRIVATE";
     join_policy: "open" | "request";
+    tags: string;
   }>({
     name: community.data?.name ?? "",
     description: community.data?.description ?? "",
     category: community.data?.category ?? CATEGORIES[1],
     visibility: community.data?.visibility ?? "PUBLIC",
     join_policy: community.data?.join_policy ?? "open",
+    tags: (community.data?.tags ?? []).join(", "),
   });
 
   const update = useMutation({
@@ -145,9 +148,52 @@ function GeneralSettings({ communityId }: { communityId: string }) {
         })
         .eq("id", communityId);
       if (error) throw error;
+
+      const tags = Array.from(
+        new Set(
+          form.tags
+            .split(/[,、\s]+/)
+            .map((t) => t.trim().replace(/^#/, ""))
+            .filter(Boolean),
+        ),
+      );
+      const { error: delError } = await supabase.from("community_tags").delete().eq("community_id", communityId);
+      if (delError) throw delError;
+      if (tags.length) {
+        const { error: insError } = await supabase
+          .from("community_tags")
+          .insert(tags.map((tag) => ({ community_id: communityId, tag })));
+        if (insError) throw insError;
+      }
+
+      await supabase.from("audit_logs").insert({
+        community_id: communityId,
+        actor_id: me.data?.id ?? null,
+        action: "community_settings",
+        target: communityId,
+        detail: "基本設定を変更",
+      });
     },
     onSuccess: () => {
-      toast.success("コミュニティを更新しました");
+      toast.success("変更を保存しました");
+      qc.invalidateQueries({ queryKey: ["community", communityId] });
+      qc.invalidateQueries({ queryKey: ["communities"] });
+      qc.invalidateQueries({ queryKey: ["audit-logs", communityId] });
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const uploadImage = useMutation({
+    mutationFn: async ({ file, kind }: { file: File; kind: "icon_url" | "banner_url" }) => {
+      const path = await uploadFile(me.data!.id, file);
+      const { error } = await supabase
+        .from("communities")
+        .update({ [kind]: path })
+        .eq("id", communityId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("画像を更新しました");
       qc.invalidateQueries({ queryKey: ["community", communityId] });
       qc.invalidateQueries({ queryKey: ["communities"] });
     },
@@ -167,6 +213,36 @@ function GeneralSettings({ communityId }: { communityId: string }) {
           <p className="text-sm text-muted-foreground">{community.data.member_count} メンバー</p>
         </div>
       </div>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-1.5">
+          <Label className="flex items-center gap-1.5">
+            <ImageIcon className="size-4" /> アイコン
+          </Label>
+          <Input
+            type="file"
+            accept="image/*"
+            disabled={uploadImage.isPending}
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) uploadImage.mutate({ file: f, kind: "icon_url" });
+            }}
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label className="flex items-center gap-1.5">
+            <ImageIcon className="size-4" /> バナー
+          </Label>
+          <Input
+            type="file"
+            accept="image/*"
+            disabled={uploadImage.isPending}
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) uploadImage.mutate({ file: f, kind: "banner_url" });
+            }}
+          />
+        </div>
+      </div>
       <div className="space-y-1.5">
         <Label>名前</Label>
         <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
@@ -174,6 +250,10 @@ function GeneralSettings({ communityId }: { communityId: string }) {
       <div className="space-y-1.5">
         <Label>説明</Label>
         <Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={3} />
+      </div>
+      <div className="space-y-1.5">
+        <Label>タグ（カンマ区切り）</Label>
+        <Input value={form.tags} onChange={(e) => setForm({ ...form, tags: e.target.value })} placeholder="ゲーム, 雑談, 初心者歓迎" />
       </div>
       <div className="grid gap-4 md:grid-cols-3">
         <div className="space-y-1.5">
@@ -191,31 +271,31 @@ function GeneralSettings({ communityId }: { communityId: string }) {
             </SelectContent>
           </Select>
         </div>
-            <div className="space-y-1.5">
-              <Label>公開範囲</Label>
-              <Select value={form.visibility} onValueChange={(v) => setForm({ ...form, visibility: v as "PUBLIC" | "UNLISTED" | "PRIVATE" })}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="PUBLIC">PUBLIC</SelectItem>
-                  <SelectItem value="UNLISTED">UNLISTED</SelectItem>
-                  <SelectItem value="PRIVATE">PRIVATE</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label>参加方法</Label>
-              <Select value={form.join_policy} onValueChange={(v) => setForm({ ...form, join_policy: v as "open" | "request" })}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="open">open</SelectItem>
-                  <SelectItem value="request">request</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+        <div className="space-y-1.5">
+          <Label>公開範囲</Label>
+          <Select value={form.visibility} onValueChange={(v) => setForm({ ...form, visibility: v as "PUBLIC" | "UNLISTED" | "PRIVATE" })}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="PUBLIC">公開（検索に表示）</SelectItem>
+              <SelectItem value="UNLISTED">限定公開（検索に非表示）</SelectItem>
+              <SelectItem value="PRIVATE">非公開（メンバーのみ）</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1.5">
+          <Label>参加方法</Label>
+          <Select value={form.join_policy} onValueChange={(v) => setForm({ ...form, join_policy: v as "open" | "request" })}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="open">誰でも参加できる</SelectItem>
+              <SelectItem value="request">参加申請制</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
       <Button onClick={() => update.mutate()} disabled={update.isPending}>
         保存
