@@ -2,7 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
-import { Settings, Plus, Trash2, Check, X, UserPlus, Shield, Hash, Copy, Link2, Sparkles, Smile } from "lucide-react";
+import { Settings, Plus, Trash2, Check, X, UserPlus, Shield, Hash, Copy, Link2, Sparkles, Smile, Ban, Flag, ScrollText, ImageIcon } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { communityQuery, channelsQuery, membersQuery } from "@/lib/queries";
 import { useMembership } from "@/components/app/JoinButton";
@@ -24,6 +24,16 @@ import { EmojiImage } from "@/components/app/CustomEmoji";
 import { uploadFile } from "@/lib/storage";
 import { useMe } from "@/lib/auth";
 import { shortDate } from "@/lib/format";
+import { MemberManagePanel } from "@/components/app/MemberManagePanel";
+import {
+  bansQuery,
+  auditLogsQuery,
+  reportsQuery,
+  moderateMember,
+  setReportStatus,
+  MOD_ACTION_LABEL,
+  REPORT_REASONS,
+} from "@/lib/moderation";
 
 export const Route = createFileRoute("/_authenticated/c/$communityId/settings")({
   head: () => ({
@@ -65,6 +75,9 @@ function CommunitySettingsPage() {
             <TabsTrigger value="welcome">ウェルカム</TabsTrigger>
             <TabsTrigger value="invites">招待リンク</TabsTrigger>
             <TabsTrigger value="emojis">絵文字</TabsTrigger>
+            <TabsTrigger value="reports">通報</TabsTrigger>
+            <TabsTrigger value="bans">BANユーザー</TabsTrigger>
+            <TabsTrigger value="audit">監査ログ</TabsTrigger>
           </TabsList>
           <TabsContent value="general">
             <GeneralSettings communityId={communityId} />
@@ -76,7 +89,7 @@ function CommunitySettingsPage() {
             <JoinRequests communityId={communityId} />
           </TabsContent>
           <TabsContent value="members">
-            <MemberManager communityId={communityId} />
+            <MemberManager communityId={communityId} myRole={role as "owner" | "admin"} />
           </TabsContent>
           <TabsContent value="welcome">
             <WelcomeSettings communityId={communityId} />
@@ -86,6 +99,15 @@ function CommunitySettingsPage() {
           </TabsContent>
           <TabsContent value="emojis">
             <EmojiManager communityId={communityId} />
+          </TabsContent>
+          <TabsContent value="reports">
+            <ReportsManager communityId={communityId} />
+          </TabsContent>
+          <TabsContent value="bans">
+            <BanManager communityId={communityId} />
+          </TabsContent>
+          <TabsContent value="audit">
+            <AuditLog communityId={communityId} />
           </TabsContent>
         </Tabs>
       </div>
