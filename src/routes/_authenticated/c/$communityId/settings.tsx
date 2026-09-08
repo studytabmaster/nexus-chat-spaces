@@ -699,3 +699,122 @@ function EmojiManager({ communityId }: { communityId: string }) {
     </div>
   );
 }
+
+function ReportsManager({ communityId }: { communityId: string }) {
+  const qc = useQueryClient();
+  const reports = useQuery(reportsQuery(communityId));
+
+  const decide = useMutation({
+    mutationFn: ({ id, status }: { id: string; status: "RESOLVED" | "DISMISSED" }) => setReportStatus(id, status),
+    onSuccess: () => {
+      toast.success("変更を保存しました");
+      qc.invalidateQueries({ queryKey: ["reports", communityId] });
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  if (reports.isLoading) return <LoadingState />;
+  if (reports.isError) return <ErrorState message={reports.error.message} onRetry={() => reports.refetch()} />;
+  if (!reports.data?.length)
+    return <EmptyState icon={Flag} title="通報はありません" body="新しい通報が届くとここに表示されます。" />;
+
+  const label = (v: string) => REPORT_REASONS.find((r) => r.value === v)?.label ?? v;
+  const targetLabel: Record<string, string> = { message: "メッセージ", user: "ユーザー", community: "コミュニティ" };
+
+  return (
+    <div className="space-y-2">
+      {reports.data.map((r) => (
+        <div key={r.id} className="rounded-xl border bg-card p-4">
+          <div className="flex flex-wrap items-center gap-2 text-sm">
+            <span className="rounded-full bg-muted px-2 py-0.5 text-xs">{targetLabel[r.target_type] ?? r.target_type}</span>
+            <span className="font-medium">{label(r.reason)}</span>
+            <span className="text-xs text-muted-foreground">{shortDate(r.created_at)}</span>
+            {r.status !== "OPEN" && (
+              <span className="text-xs text-muted-foreground">
+                {r.status === "RESOLVED" ? "対応済み" : "却下"}
+              </span>
+            )}
+          </div>
+          {r.preview && <p className="mt-2 line-clamp-3 rounded-lg bg-muted/50 p-2 text-sm">{r.preview}</p>}
+          {r.detail && <p className="mt-2 text-sm text-muted-foreground">{r.detail}</p>}
+          <p className="mt-2 text-xs text-muted-foreground">通報者：{r.reporter?.display_name ?? "不明"}</p>
+          {r.status === "OPEN" && (
+            <div className="mt-3 flex justify-end gap-2">
+              <Button size="sm" variant="secondary" onClick={() => decide.mutate({ id: r.id, status: "DISMISSED" })}>
+                <X className="mr-1 size-3.5" /> 却下
+              </Button>
+              <Button size="sm" onClick={() => decide.mutate({ id: r.id, status: "RESOLVED" })}>
+                <Check className="mr-1 size-3.5" /> 対応済みにする
+              </Button>
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function BanManager({ communityId }: { communityId: string }) {
+  const qc = useQueryClient();
+  const bans = useQuery(bansQuery(communityId));
+
+  const unban = useMutation({
+    mutationFn: (userId: string) => moderateMember({ communityId, userId, action: "unban" }),
+    onSuccess: () => {
+      toast.success("BANを解除しました");
+      qc.invalidateQueries({ queryKey: ["bans", communityId] });
+      qc.invalidateQueries({ queryKey: ["audit-logs", communityId] });
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  if (bans.isLoading) return <LoadingState />;
+  if (bans.isError) return <ErrorState message={bans.error.message} onRetry={() => bans.refetch()} />;
+  if (!bans.data?.length) return <EmptyState icon={Ban} title="BANされたユーザーはいません" body="BANすると再参加できなくなります。" />;
+
+  return (
+    <div className="space-y-2">
+      {bans.data.map((b) => (
+        <div key={b.id} className="flex items-center justify-between gap-3 rounded-xl border bg-card p-3">
+          <span className="flex min-w-0 items-center gap-3">
+            <UserAvatar name={b.profile?.display_name ?? "?"} avatarUrl={b.profile?.avatar_url ?? null} />
+            <span className="min-w-0">
+              <span className="block truncate font-medium">{b.profile?.display_name ?? "不明なユーザー"}</span>
+              <span className="block truncate text-xs text-muted-foreground">
+                {shortDate(b.created_at)}
+                {b.reason ? ` ・ ${b.reason}` : ""}
+              </span>
+            </span>
+          </span>
+          <Button size="sm" variant="secondary" onClick={() => unban.mutate(b.user_id)} disabled={unban.isPending}>
+            BAN解除
+          </Button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function AuditLog({ communityId }: { communityId: string }) {
+  const logs = useQuery(auditLogsQuery(communityId));
+
+  if (logs.isLoading) return <LoadingState />;
+  if (logs.isError) return <ErrorState message={logs.error.message} onRetry={() => logs.refetch()} />;
+  if (!logs.data?.length) return <EmptyState icon={ScrollText} title="監査ログはありません" body="管理操作を行うとここに記録されます。" />;
+
+  return (
+    <div className="space-y-2">
+      {logs.data.map((l) => (
+        <div key={l.id} className="rounded-xl border bg-card p-3 text-sm">
+          <p className="text-xs text-muted-foreground">{new Date(l.created_at).toLocaleString("ja-JP")}</p>
+          <p className="mt-0.5">
+            <span className="font-medium">{l.actor?.display_name ?? "不明"}</span>
+            {" が "}
+            {MOD_ACTION_LABEL[l.action] ?? l.action}
+            {l.detail ? ` を実行（${l.detail}）` : " を実行"}
+          </p>
+        </div>
+      ))}
+    </div>
+  );
+}
