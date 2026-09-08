@@ -61,7 +61,7 @@ export function ReportDialog({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>{trigger}</DialogTrigger>
+      {trigger ? <DialogTrigger asChild>{trigger}</DialogTrigger> : null}
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>通報する</DialogTitle>
