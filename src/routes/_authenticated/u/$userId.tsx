@@ -1,7 +1,8 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { MessageSquare, AtSign, Calendar, Users, UserPlus, Check, Clock } from "lucide-react";
+import { MessageSquare, AtSign, Calendar, Users, UserPlus, Check, Clock, Flag } from "lucide-react";
+import { ReportDialog } from "@/components/app/ReportDialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useMe } from "@/lib/auth";
 import { profileQuery, myCommunitiesQuery } from "@/lib/queries";
@@ -93,6 +94,18 @@ function ProfilePage() {
                     <MessageSquare className="mr-1 size-4" /> DMを送る
                   </Button>
                 )}
+                <ReportDialog
+                  targetType="user"
+                  targetId={userId}
+                  link={`/u/${userId}`}
+                  preview={profile.data.display_name}
+                  trigger={
+                    <Button variant="ghost" size="icon" aria-label="このユーザーを通報">
+                      <Flag className="size-4" />
+                    </Button>
+                  }
+                />
+
               </div>
             )
           }

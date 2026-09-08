@@ -14,6 +14,51 @@ export type Database = {
   }
   public: {
     Tables: {
+      audit_logs: {
+        Row: {
+          action: string
+          actor_id: string | null
+          community_id: string
+          created_at: string
+          detail: string
+          id: string
+          target: string
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          community_id: string
+          created_at?: string
+          detail?: string
+          id?: string
+          target?: string
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          community_id?: string
+          created_at?: string
+          detail?: string
+          id?: string
+          target?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audit_logs_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "audit_logs_community_id_fkey"
+            columns: ["community_id"]
+            isOneToOne: false
+            referencedRelation: "communities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       badges: {
         Row: {
           color: string
@@ -160,11 +205,61 @@ export type Database = {
         }
         Relationships: []
       }
+      community_bans: {
+        Row: {
+          community_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          reason: string
+          user_id: string
+        }
+        Insert: {
+          community_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          reason?: string
+          user_id: string
+        }
+        Update: {
+          community_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          reason?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_bans_community_id_fkey"
+            columns: ["community_id"]
+            isOneToOne: false
+            referencedRelation: "communities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "community_bans_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "community_bans_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       community_members: {
         Row: {
           community_id: string
           id: string
           joined_at: string
+          muted_until: string | null
           role: Database["public"]["Enums"]["community_role"]
           user_id: string
         }
@@ -172,6 +267,7 @@ export type Database = {
           community_id: string
           id?: string
           joined_at?: string
+          muted_until?: string | null
           role?: Database["public"]["Enums"]["community_role"]
           user_id: string
         }
@@ -179,6 +275,7 @@ export type Database = {
           community_id?: string
           id?: string
           joined_at?: string
+          muted_until?: string | null
           role?: Database["public"]["Enums"]["community_role"]
           user_id?: string
         }
@@ -768,6 +865,61 @@ export type Database = {
           },
         ]
       }
+      moderation_actions: {
+        Row: {
+          action: string
+          actor_id: string | null
+          community_id: string
+          created_at: string
+          expires_at: string | null
+          id: string
+          reason: string
+          user_id: string
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          community_id: string
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          reason?: string
+          user_id: string
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          community_id?: string
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          reason?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "moderation_actions_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "moderation_actions_community_id_fkey"
+            columns: ["community_id"]
+            isOneToOne: false
+            referencedRelation: "communities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "moderation_actions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notifications: {
         Row: {
           actor_id: string | null
@@ -1105,6 +1257,66 @@ export type Database = {
         }
         Relationships: []
       }
+      reports: {
+        Row: {
+          community_id: string | null
+          created_at: string
+          detail: string
+          id: string
+          link: string | null
+          preview: string
+          reason: string
+          reporter_id: string
+          status: string
+          target_id: string
+          target_type: string
+          updated_at: string
+        }
+        Insert: {
+          community_id?: string | null
+          created_at?: string
+          detail?: string
+          id?: string
+          link?: string | null
+          preview?: string
+          reason: string
+          reporter_id: string
+          status?: string
+          target_id: string
+          target_type: string
+          updated_at?: string
+        }
+        Update: {
+          community_id?: string | null
+          created_at?: string
+          detail?: string
+          id?: string
+          link?: string | null
+          preview?: string
+          reason?: string
+          reporter_id?: string
+          status?: string
+          target_id?: string
+          target_type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reports_community_id_fkey"
+            columns: ["community_id"]
+            isOneToOne: false
+            referencedRelation: "communities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reports_reporter_id_fkey"
+            columns: ["reporter_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       saved_items: {
         Row: {
           created_at: string
@@ -1325,12 +1537,26 @@ export type Database = {
         Args: { _community_id: string; _user_id: string }
         Returns: boolean
       }
+      moderate_member: {
+        Args: {
+          _action: string
+          _community_id: string
+          _minutes?: number
+          _reason?: string
+          _user_id: string
+        }
+        Returns: undefined
+      }
       redeem_invite: { Args: { _code: string }; Returns: string }
       review_join_request: {
         Args: { _approve: boolean; _request_id: string }
         Returns: undefined
       }
       start_dm: { Args: { _other: string }; Returns: string }
+      transfer_ownership: {
+        Args: { _community_id: string; _new_owner: string }
+        Returns: undefined
+      }
     }
     Enums: {
       app_role: "admin" | "moderator" | "user"

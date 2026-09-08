@@ -2,7 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
-import { Settings, Plus, Trash2, Check, X, UserPlus, Shield, Hash, Copy, Link2, Sparkles, Smile } from "lucide-react";
+import { Settings, Plus, Trash2, Check, X, UserPlus, Shield, Hash, Copy, Link2, Sparkles, Smile, Ban, Flag, ScrollText, ImageIcon } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { communityQuery, channelsQuery, membersQuery } from "@/lib/queries";
 import { useMembership } from "@/components/app/JoinButton";
@@ -24,6 +24,16 @@ import { EmojiImage } from "@/components/app/CustomEmoji";
 import { uploadFile } from "@/lib/storage";
 import { useMe } from "@/lib/auth";
 import { shortDate } from "@/lib/format";
+import { MemberManagePanel } from "@/components/app/MemberManagePanel";
+import {
+  bansQuery,
+  auditLogsQuery,
+  reportsQuery,
+  moderateMember,
+  setReportStatus,
+  MOD_ACTION_LABEL,
+  REPORT_REASONS,
+} from "@/lib/moderation";
 
 export const Route = createFileRoute("/_authenticated/c/$communityId/settings")({
   head: () => ({
@@ -65,6 +75,9 @@ function CommunitySettingsPage() {
             <TabsTrigger value="welcome">ウェルカム</TabsTrigger>
             <TabsTrigger value="invites">招待リンク</TabsTrigger>
             <TabsTrigger value="emojis">絵文字</TabsTrigger>
+            <TabsTrigger value="reports">通報</TabsTrigger>
+            <TabsTrigger value="bans">BANユーザー</TabsTrigger>
+            <TabsTrigger value="audit">監査ログ</TabsTrigger>
           </TabsList>
           <TabsContent value="general">
             <GeneralSettings communityId={communityId} />
@@ -76,7 +89,7 @@ function CommunitySettingsPage() {
             <JoinRequests communityId={communityId} />
           </TabsContent>
           <TabsContent value="members">
-            <MemberManager communityId={communityId} />
+            <MemberManager communityId={communityId} myRole={role as "owner" | "admin"} />
           </TabsContent>
           <TabsContent value="welcome">
             <WelcomeSettings communityId={communityId} />
@@ -87,6 +100,15 @@ function CommunitySettingsPage() {
           <TabsContent value="emojis">
             <EmojiManager communityId={communityId} />
           </TabsContent>
+          <TabsContent value="reports">
+            <ReportsManager communityId={communityId} />
+          </TabsContent>
+          <TabsContent value="bans">
+            <BanManager communityId={communityId} />
+          </TabsContent>
+          <TabsContent value="audit">
+            <AuditLog communityId={communityId} />
+          </TabsContent>
         </Tabs>
       </div>
     </div>
@@ -95,6 +117,7 @@ function CommunitySettingsPage() {
 
 function GeneralSettings({ communityId }: { communityId: string }) {
   const qc = useQueryClient();
+  const me = useMe();
   const community = useQuery(communityQuery(communityId));
   const [form, setForm] = useState<{
     name: string;
@@ -102,12 +125,14 @@ function GeneralSettings({ communityId }: { communityId: string }) {
     category: string;
     visibility: "PUBLIC" | "UNLISTED" | "PRIVATE";
     join_policy: "open" | "request";
+    tags: string;
   }>({
     name: community.data?.name ?? "",
     description: community.data?.description ?? "",
     category: community.data?.category ?? CATEGORIES[1],
     visibility: community.data?.visibility ?? "PUBLIC",
     join_policy: community.data?.join_policy ?? "open",
+    tags: (community.data?.tags ?? []).join(", "),
   });
 
   const update = useMutation({
@@ -123,9 +148,50 @@ function GeneralSettings({ communityId }: { communityId: string }) {
         })
         .eq("id", communityId);
       if (error) throw error;
+
+      const tags = Array.from(
+        new Set(
+          form.tags
+            .split(/[,、\s]+/)
+            .map((t) => t.trim().replace(/^#/, ""))
+            .filter(Boolean),
+        ),
+      );
+      const { error: delError } = await supabase.from("community_tags").delete().eq("community_id", communityId);
+      if (delError) throw delError;
+      if (tags.length) {
+        const { error: insError } = await supabase
+          .from("community_tags")
+          .insert(tags.map((tag) => ({ community_id: communityId, tag })));
+        if (insError) throw insError;
+      }
+
+      await supabase.from("audit_logs").insert({
+        community_id: communityId,
+        actor_id: me.data?.id ?? null,
+        action: "community_settings",
+        target: communityId,
+        detail: "基本設定を変更",
+      });
     },
     onSuccess: () => {
-      toast.success("コミュニティを更新しました");
+      toast.success("変更を保存しました");
+      qc.invalidateQueries({ queryKey: ["community", communityId] });
+      qc.invalidateQueries({ queryKey: ["communities"] });
+      qc.invalidateQueries({ queryKey: ["audit-logs", communityId] });
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const uploadImage = useMutation({
+    mutationFn: async ({ file, kind }: { file: File; kind: "icon_url" | "banner_url" }) => {
+      const path = await uploadFile(me.data!.id, file);
+      const patch = kind === "icon_url" ? { icon_url: path } : { banner_url: path };
+      const { error } = await supabase.from("communities").update(patch).eq("id", communityId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("画像を更新しました");
       qc.invalidateQueries({ queryKey: ["community", communityId] });
       qc.invalidateQueries({ queryKey: ["communities"] });
     },
@@ -145,6 +211,36 @@ function GeneralSettings({ communityId }: { communityId: string }) {
           <p className="text-sm text-muted-foreground">{community.data.member_count} メンバー</p>
         </div>
       </div>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-1.5">
+          <Label className="flex items-center gap-1.5">
+            <ImageIcon className="size-4" /> アイコン
+          </Label>
+          <Input
+            type="file"
+            accept="image/*"
+            disabled={uploadImage.isPending}
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) uploadImage.mutate({ file: f, kind: "icon_url" });
+            }}
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label className="flex items-center gap-1.5">
+            <ImageIcon className="size-4" /> バナー
+          </Label>
+          <Input
+            type="file"
+            accept="image/*"
+            disabled={uploadImage.isPending}
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) uploadImage.mutate({ file: f, kind: "banner_url" });
+            }}
+          />
+        </div>
+      </div>
       <div className="space-y-1.5">
         <Label>名前</Label>
         <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
@@ -152,6 +248,10 @@ function GeneralSettings({ communityId }: { communityId: string }) {
       <div className="space-y-1.5">
         <Label>説明</Label>
         <Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={3} />
+      </div>
+      <div className="space-y-1.5">
+        <Label>タグ（カンマ区切り）</Label>
+        <Input value={form.tags} onChange={(e) => setForm({ ...form, tags: e.target.value })} placeholder="ゲーム, 雑談, 初心者歓迎" />
       </div>
       <div className="grid gap-4 md:grid-cols-3">
         <div className="space-y-1.5">
@@ -169,31 +269,31 @@ function GeneralSettings({ communityId }: { communityId: string }) {
             </SelectContent>
           </Select>
         </div>
-            <div className="space-y-1.5">
-              <Label>公開範囲</Label>
-              <Select value={form.visibility} onValueChange={(v) => setForm({ ...form, visibility: v as "PUBLIC" | "UNLISTED" | "PRIVATE" })}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="PUBLIC">PUBLIC</SelectItem>
-                  <SelectItem value="UNLISTED">UNLISTED</SelectItem>
-                  <SelectItem value="PRIVATE">PRIVATE</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label>参加方法</Label>
-              <Select value={form.join_policy} onValueChange={(v) => setForm({ ...form, join_policy: v as "open" | "request" })}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="open">open</SelectItem>
-                  <SelectItem value="request">request</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+        <div className="space-y-1.5">
+          <Label>公開範囲</Label>
+          <Select value={form.visibility} onValueChange={(v) => setForm({ ...form, visibility: v as "PUBLIC" | "UNLISTED" | "PRIVATE" })}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="PUBLIC">公開（検索に表示）</SelectItem>
+              <SelectItem value="UNLISTED">限定公開（検索に非表示）</SelectItem>
+              <SelectItem value="PRIVATE">非公開（メンバーのみ）</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1.5">
+          <Label>参加方法</Label>
+          <Select value={form.join_policy} onValueChange={(v) => setForm({ ...form, join_policy: v as "open" | "request" })}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="open">誰でも参加できる</SelectItem>
+              <SelectItem value="request">参加申請制</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
       <Button onClick={() => update.mutate()} disabled={update.isPending}>
         保存
@@ -358,28 +458,81 @@ function JoinRequests({ communityId }: { communityId: string }) {
   );
 }
 
-function MemberManager({ communityId }: { communityId: string }) {
+const ROLE_JA: Record<string, string> = {
+  owner: "オーナー",
+  admin: "管理者",
+  moderator: "モデレーター",
+  member: "メンバー",
+};
+
+function MemberManager({ communityId, myRole }: { communityId: string; myRole: "owner" | "admin" }) {
   const members = useQuery(membersQuery(communityId));
+  const [q, setQ] = useState("");
+  const [openId, setOpenId] = useState<string | null>(null);
 
   if (members.isLoading) return <LoadingState />;
   if (members.isError) return <ErrorState message={members.error.message} onRetry={() => members.refetch()} />;
 
+  const list = (members.data ?? []).filter(
+    (m) =>
+      !q.trim() ||
+      m.profile.display_name.toLowerCase().includes(q.toLowerCase()) ||
+      m.profile.username.toLowerCase().includes(q.toLowerCase()),
+  );
+  const selected = list.find((m) => m.id === openId) ?? null;
+
   return (
-    <div className="space-y-2">
-      {members.data?.map((m) => (
-        <Link
-          key={m.id}
-          to="/u/$userId"
-          params={{ userId: m.user_id }}
-          className="flex items-center justify-between rounded-xl border bg-card p-3 hover:bg-surface-hover"
-        >
-          <span className="flex items-center gap-3">
-            <UserAvatar name={m.profile.display_name} avatarUrl={m.profile.avatar_url} />
-            <span className="font-medium">{m.profile.display_name}</span>
-          </span>
-          <span className="text-sm text-muted-foreground">{m.role}</span>
-        </Link>
-      ))}
+    <div className="space-y-3">
+      <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="メンバーを検索" />
+      <div className="space-y-2">
+        {list.map((m) => {
+          const muted =
+            (m as { muted_until?: string | null }).muted_until &&
+            new Date((m as { muted_until?: string | null }).muted_until!) > new Date();
+          return (
+            <button
+              key={m.id}
+              onClick={() => setOpenId(m.id)}
+              className="flex w-full items-center justify-between gap-3 rounded-xl border bg-card p-3 text-left hover:bg-surface-hover"
+            >
+              <span className="flex min-w-0 items-center gap-3">
+                <UserAvatar name={m.profile.display_name} avatarUrl={m.profile.avatar_url} status={m.profile.status} showStatus />
+                <span className="min-w-0">
+                  <span className="block truncate font-medium">{m.profile.display_name}</span>
+                  <span className="block truncate text-xs text-muted-foreground">
+                    @{m.profile.username} ・ {shortDate(m.joined_at)} 参加
+                  </span>
+                </span>
+              </span>
+              <span className="shrink-0 text-right text-xs text-muted-foreground">
+                <span className="block">{ROLE_JA[m.role] ?? m.role}</span>
+                {muted && <span className="block text-destructive">タイムアウト中</span>}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      <Dialog open={!!selected} onOpenChange={(o) => !o && setOpenId(null)}>
+        <DialogContent className="max-h-[85vh] max-w-lg overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>メンバー管理</DialogTitle>
+          </DialogHeader>
+          {selected && (
+            <>
+              <MemberManagePanel communityId={communityId} member={selected} myRole={myRole} />
+              <Link
+                to="/u/$userId"
+                params={{ userId: selected.user_id }}
+                className="text-sm text-primary hover:underline"
+                onClick={() => setOpenId(null)}
+              >
+                プロフィールを見る
+              </Link>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -621,6 +774,125 @@ function EmojiManager({ communityId }: { communityId: string }) {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function ReportsManager({ communityId }: { communityId: string }) {
+  const qc = useQueryClient();
+  const reports = useQuery(reportsQuery(communityId));
+
+  const decide = useMutation({
+    mutationFn: ({ id, status }: { id: string; status: "RESOLVED" | "DISMISSED" }) => setReportStatus(id, status),
+    onSuccess: () => {
+      toast.success("変更を保存しました");
+      qc.invalidateQueries({ queryKey: ["reports", communityId] });
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  if (reports.isLoading) return <LoadingState />;
+  if (reports.isError) return <ErrorState message={reports.error.message} onRetry={() => reports.refetch()} />;
+  if (!reports.data?.length)
+    return <EmptyState icon={Flag} title="通報はありません" body="新しい通報が届くとここに表示されます。" />;
+
+  const label = (v: string) => REPORT_REASONS.find((r) => r.value === v)?.label ?? v;
+  const targetLabel: Record<string, string> = { message: "メッセージ", user: "ユーザー", community: "コミュニティ" };
+
+  return (
+    <div className="space-y-2">
+      {reports.data.map((r) => (
+        <div key={r.id} className="rounded-xl border bg-card p-4">
+          <div className="flex flex-wrap items-center gap-2 text-sm">
+            <span className="rounded-full bg-muted px-2 py-0.5 text-xs">{targetLabel[r.target_type] ?? r.target_type}</span>
+            <span className="font-medium">{label(r.reason)}</span>
+            <span className="text-xs text-muted-foreground">{shortDate(r.created_at)}</span>
+            {r.status !== "OPEN" && (
+              <span className="text-xs text-muted-foreground">
+                {r.status === "RESOLVED" ? "対応済み" : "却下"}
+              </span>
+            )}
+          </div>
+          {r.preview && <p className="mt-2 line-clamp-3 rounded-lg bg-muted/50 p-2 text-sm">{r.preview}</p>}
+          {r.detail && <p className="mt-2 text-sm text-muted-foreground">{r.detail}</p>}
+          <p className="mt-2 text-xs text-muted-foreground">通報者：{r.reporter?.display_name ?? "不明"}</p>
+          {r.status === "OPEN" && (
+            <div className="mt-3 flex justify-end gap-2">
+              <Button size="sm" variant="secondary" onClick={() => decide.mutate({ id: r.id, status: "DISMISSED" })}>
+                <X className="mr-1 size-3.5" /> 却下
+              </Button>
+              <Button size="sm" onClick={() => decide.mutate({ id: r.id, status: "RESOLVED" })}>
+                <Check className="mr-1 size-3.5" /> 対応済みにする
+              </Button>
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function BanManager({ communityId }: { communityId: string }) {
+  const qc = useQueryClient();
+  const bans = useQuery(bansQuery(communityId));
+
+  const unban = useMutation({
+    mutationFn: (userId: string) => moderateMember({ communityId, userId, action: "unban" }),
+    onSuccess: () => {
+      toast.success("BANを解除しました");
+      qc.invalidateQueries({ queryKey: ["bans", communityId] });
+      qc.invalidateQueries({ queryKey: ["audit-logs", communityId] });
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  if (bans.isLoading) return <LoadingState />;
+  if (bans.isError) return <ErrorState message={bans.error.message} onRetry={() => bans.refetch()} />;
+  if (!bans.data?.length) return <EmptyState icon={Ban} title="BANされたユーザーはいません" body="BANすると再参加できなくなります。" />;
+
+  return (
+    <div className="space-y-2">
+      {bans.data.map((b) => (
+        <div key={b.id} className="flex items-center justify-between gap-3 rounded-xl border bg-card p-3">
+          <span className="flex min-w-0 items-center gap-3">
+            <UserAvatar name={b.profile?.display_name ?? "?"} avatarUrl={b.profile?.avatar_url ?? null} />
+            <span className="min-w-0">
+              <span className="block truncate font-medium">{b.profile?.display_name ?? "不明なユーザー"}</span>
+              <span className="block truncate text-xs text-muted-foreground">
+                {shortDate(b.created_at)}
+                {b.reason ? ` ・ ${b.reason}` : ""}
+              </span>
+            </span>
+          </span>
+          <Button size="sm" variant="secondary" onClick={() => unban.mutate(b.user_id)} disabled={unban.isPending}>
+            BAN解除
+          </Button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function AuditLog({ communityId }: { communityId: string }) {
+  const logs = useQuery(auditLogsQuery(communityId));
+
+  if (logs.isLoading) return <LoadingState />;
+  if (logs.isError) return <ErrorState message={logs.error.message} onRetry={() => logs.refetch()} />;
+  if (!logs.data?.length) return <EmptyState icon={ScrollText} title="監査ログはありません" body="管理操作を行うとここに記録されます。" />;
+
+  return (
+    <div className="space-y-2">
+      {logs.data.map((l) => (
+        <div key={l.id} className="rounded-xl border bg-card p-3 text-sm">
+          <p className="text-xs text-muted-foreground">{new Date(l.created_at).toLocaleString("ja-JP")}</p>
+          <p className="mt-0.5">
+            <span className="font-medium">{l.actor?.display_name ?? "不明"}</span>
+            {" が "}
+            {MOD_ACTION_LABEL[l.action] ?? l.action}
+            {l.detail ? ` を実行（${l.detail}）` : " を実行"}
+          </p>
+        </div>
+      ))}
     </div>
   );
 }
