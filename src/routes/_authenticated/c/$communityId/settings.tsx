@@ -380,28 +380,81 @@ function JoinRequests({ communityId }: { communityId: string }) {
   );
 }
 
-function MemberManager({ communityId }: { communityId: string }) {
+const ROLE_JA: Record<string, string> = {
+  owner: "オーナー",
+  admin: "管理者",
+  moderator: "モデレーター",
+  member: "メンバー",
+};
+
+function MemberManager({ communityId, myRole }: { communityId: string; myRole: "owner" | "admin" }) {
   const members = useQuery(membersQuery(communityId));
+  const [q, setQ] = useState("");
+  const [openId, setOpenId] = useState<string | null>(null);
 
   if (members.isLoading) return <LoadingState />;
   if (members.isError) return <ErrorState message={members.error.message} onRetry={() => members.refetch()} />;
 
+  const list = (members.data ?? []).filter(
+    (m) =>
+      !q.trim() ||
+      m.profile.display_name.toLowerCase().includes(q.toLowerCase()) ||
+      m.profile.username.toLowerCase().includes(q.toLowerCase()),
+  );
+  const selected = list.find((m) => m.id === openId) ?? null;
+
   return (
-    <div className="space-y-2">
-      {members.data?.map((m) => (
-        <Link
-          key={m.id}
-          to="/u/$userId"
-          params={{ userId: m.user_id }}
-          className="flex items-center justify-between rounded-xl border bg-card p-3 hover:bg-surface-hover"
-        >
-          <span className="flex items-center gap-3">
-            <UserAvatar name={m.profile.display_name} avatarUrl={m.profile.avatar_url} />
-            <span className="font-medium">{m.profile.display_name}</span>
-          </span>
-          <span className="text-sm text-muted-foreground">{m.role}</span>
-        </Link>
-      ))}
+    <div className="space-y-3">
+      <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="メンバーを検索" />
+      <div className="space-y-2">
+        {list.map((m) => {
+          const muted =
+            (m as { muted_until?: string | null }).muted_until &&
+            new Date((m as { muted_until?: string | null }).muted_until!) > new Date();
+          return (
+            <button
+              key={m.id}
+              onClick={() => setOpenId(m.id)}
+              className="flex w-full items-center justify-between gap-3 rounded-xl border bg-card p-3 text-left hover:bg-surface-hover"
+            >
+              <span className="flex min-w-0 items-center gap-3">
+                <UserAvatar name={m.profile.display_name} avatarUrl={m.profile.avatar_url} status={m.profile.status} showStatus />
+                <span className="min-w-0">
+                  <span className="block truncate font-medium">{m.profile.display_name}</span>
+                  <span className="block truncate text-xs text-muted-foreground">
+                    @{m.profile.username} ・ {shortDate(m.joined_at)} 参加
+                  </span>
+                </span>
+              </span>
+              <span className="shrink-0 text-right text-xs text-muted-foreground">
+                <span className="block">{ROLE_JA[m.role] ?? m.role}</span>
+                {muted && <span className="block text-destructive">タイムアウト中</span>}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      <Dialog open={!!selected} onOpenChange={(o) => !o && setOpenId(null)}>
+        <DialogContent className="max-h-[85vh] max-w-lg overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>メンバー管理</DialogTitle>
+          </DialogHeader>
+          {selected && (
+            <>
+              <MemberManagePanel communityId={communityId} member={selected} myRole={myRole} />
+              <Link
+                to="/u/$userId"
+                params={{ userId: selected.user_id }}
+                className="text-sm text-primary hover:underline"
+                onClick={() => setOpenId(null)}
+              >
+                プロフィールを見る
+              </Link>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
