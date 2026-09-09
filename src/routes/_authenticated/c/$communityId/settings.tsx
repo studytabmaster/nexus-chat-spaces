@@ -2,7 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
-import { Settings, Plus, Trash2, Check, X, UserPlus, Shield, Hash, Copy, Link2, Sparkles, Smile, Ban, Flag, ScrollText, ImageIcon } from "lucide-react";
+import { Settings, Plus, Trash2, Check, X, UserPlus, Shield, Hash, Copy, Link2, Sparkles, Smile, Ban, Flag, ScrollText, ImageIcon, AlertTriangle, Crown, LogOut, Trash } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { communityQuery, channelsQuery, membersQuery } from "@/lib/queries";
 import { useMembership } from "@/components/app/JoinButton";
@@ -33,6 +33,8 @@ import {
   setReportStatus,
   MOD_ACTION_LABEL,
   REPORT_REASONS,
+  transferOwnership,
+  deleteCommunity,
 } from "@/lib/moderation";
 
 export const Route = createFileRoute("/_authenticated/c/$communityId/settings")({
