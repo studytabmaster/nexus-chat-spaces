@@ -234,7 +234,6 @@ function GeneralSettings({ communityId, myRole }: { communityId: string; myRole:
   if (community.isError) return <ErrorState message={community.error.message} onRetry={() => community.refetch()} />;
   if (!community.data) return <EmptyState icon={Settings} title="コミュニティが見つかりません" />;
 
-  const myRole = membership?.data?.role;
   const isOwner = myRole === "owner";
   const transferCandidates = members.data?.filter((m) => m.user_id !== me.data?.id && m.role !== "owner") ?? [];
 
