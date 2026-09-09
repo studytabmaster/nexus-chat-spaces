@@ -118,9 +118,16 @@ function CommunitySettingsPage() {
 }
 
 function GeneralSettings({ communityId }: { communityId: string }) {
+  const navigate = useNavigate();
   const qc = useQueryClient();
   const me = useMe();
   const community = useQuery(communityQuery(communityId));
+  const members = useQuery(membersQuery(communityId));
+  const [transferOpen, setTransferOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState("");
+  const [transferTarget, setTransferTarget] = useState<string | null>(null);
+
   const [form, setForm] = useState<{
     name: string;
     description: string;
@@ -200,106 +207,243 @@ function GeneralSettings({ communityId }: { communityId: string }) {
     onError: (e) => toast.error(e.message),
   });
 
+  const transfer = useMutation({
+    mutationFn: (newOwner: string) => transferOwnership(communityId, newOwner),
+    onSuccess: () => {
+      toast.success("オーナーを移譲しました");
+      setTransferOpen(false);
+      setTransferTarget(null);
+      qc.invalidateQueries({ queryKey: ["community", communityId] });
+      qc.invalidateQueries({ queryKey: ["members", communityId] });
+      qc.invalidateQueries({ queryKey: ["audit-logs", communityId] });
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const remove = useMutation({
+    mutationFn: () => deleteCommunity(communityId),
+    onSuccess: () => {
+      toast.success("コミュニティを削除しました");
+      qc.invalidateQueries({ queryKey: ["communities"] });
+      navigate({ to: "/home" });
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
   if (community.isLoading) return <LoadingState />;
   if (community.isError) return <ErrorState message={community.error.message} onRetry={() => community.refetch()} />;
   if (!community.data) return <EmptyState icon={Settings} title="コミュニティが見つかりません" />;
 
+  const myRole = membership?.data?.role;
+  const isOwner = myRole === "owner";
+  const transferCandidates = members.data?.filter((m) => m.user_id !== me.data?.id && m.role !== "owner") ?? [];
+
   return (
-    <div className="space-y-4 rounded-2xl border bg-card p-6">
-      <div className="flex items-center gap-4">
-        <CommunityIcon id={community.data.id} name={community.data.name} iconUrl={community.data.icon_url} className="size-16 text-xl" />
-        <div>
-          <p className="font-semibold">{community.data.name}</p>
-          <p className="text-sm text-muted-foreground">{community.data.member_count} メンバー</p>
+    <div className="space-y-4">
+      <div className="space-y-4 rounded-2xl border bg-card p-6">
+        <div className="flex items-center gap-4">
+          <CommunityIcon id={community.data.id} name={community.data.name} iconUrl={community.data.icon_url} className="size-16 text-xl" />
+          <div>
+            <p className="font-semibold">{community.data.name}</p>
+            <p className="text-sm text-muted-foreground">{community.data.member_count} メンバー</p>
+          </div>
         </div>
-      </div>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="space-y-1.5">
-          <Label className="flex items-center gap-1.5">
-            <ImageIcon className="size-4" /> アイコン
-          </Label>
-          <Input
-            type="file"
-            accept="image/*"
-            disabled={uploadImage.isPending}
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) uploadImage.mutate({ file: f, kind: "icon_url" });
-            }}
-          />
-        </div>
-        <div className="space-y-1.5">
-          <Label className="flex items-center gap-1.5">
-            <ImageIcon className="size-4" /> バナー
-          </Label>
-          <Input
-            type="file"
-            accept="image/*"
-            disabled={uploadImage.isPending}
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) uploadImage.mutate({ file: f, kind: "banner_url" });
-            }}
-          />
-        </div>
-      </div>
-      <div className="space-y-1.5">
-        <Label>名前</Label>
-        <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-      </div>
-      <div className="space-y-1.5">
-        <Label>説明</Label>
-        <Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={3} />
-      </div>
-      <div className="space-y-1.5">
-        <Label>タグ（カンマ区切り）</Label>
-        <Input value={form.tags} onChange={(e) => setForm({ ...form, tags: e.target.value })} placeholder="ゲーム, 雑談, 初心者歓迎" />
-      </div>
-      <div className="grid gap-4 md:grid-cols-3">
-        <div className="space-y-1.5">
-          <Label>カテゴリー</Label>
-          <Select value={form.category} onValueChange={(v) => setForm({ ...form, category: v })}>
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {CATEGORIES.filter((c) => c !== "すべて").map((c) => (
-                <SelectItem key={c} value={c}>
-                  {c}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label className="flex items-center gap-1.5">
+              <ImageIcon className="size-4" /> アイコン
+            </Label>
+            <Input
+              type="file"
+              accept="image/*"
+              disabled={uploadImage.isPending}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) uploadImage.mutate({ file: f, kind: "icon_url" });
+              }}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="flex items-center gap-1.5">
+              <ImageIcon className="size-4" /> バナー
+            </Label>
+            <Input
+              type="file"
+              accept="image/*"
+              disabled={uploadImage.isPending}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) uploadImage.mutate({ file: f, kind: "banner_url" });
+              }}
+            />
+          </div>
         </div>
         <div className="space-y-1.5">
-          <Label>公開範囲</Label>
-          <Select value={form.visibility} onValueChange={(v) => setForm({ ...form, visibility: v as "PUBLIC" | "UNLISTED" | "PRIVATE" })}>
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="PUBLIC">公開（検索に表示）</SelectItem>
-              <SelectItem value="UNLISTED">限定公開（検索に非表示）</SelectItem>
-              <SelectItem value="PRIVATE">非公開（メンバーのみ）</SelectItem>
-            </SelectContent>
-          </Select>
+          <Label>名前</Label>
+          <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
         </div>
         <div className="space-y-1.5">
-          <Label>参加方法</Label>
-          <Select value={form.join_policy} onValueChange={(v) => setForm({ ...form, join_policy: v as "open" | "request" })}>
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="open">誰でも参加できる</SelectItem>
-              <SelectItem value="request">参加申請制</SelectItem>
-            </SelectContent>
-          </Select>
+          <Label>説明</Label>
+          <Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={3} />
         </div>
+        <div className="space-y-1.5">
+          <Label>タグ（カンマ区切り）</Label>
+          <Input value={form.tags} onChange={(e) => setForm({ ...form, tags: e.target.value })} placeholder="ゲーム, 雑談, 初心者歓迎" />
+        </div>
+        <div className="grid gap-4 md:grid-cols-3">
+          <div className="space-y-1.5">
+            <Label>カテゴリー</Label>
+            <Select value={form.category} onValueChange={(v) => setForm({ ...form, category: v })}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {CATEGORIES.filter((c) => c !== "すべて").map((c) => (
+                  <SelectItem key={c} value={c}>
+                    {c}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label>公開範囲</Label>
+            <Select value={form.visibility} onValueChange={(v) => setForm({ ...form, visibility: v as "PUBLIC" | "UNLISTED" | "PRIVATE" })}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="PUBLIC">公開（検索に表示）</SelectItem>
+                <SelectItem value="UNLISTED">限定公開（検索に非表示）</SelectItem>
+                <SelectItem value="PRIVATE">非公開（メンバーのみ）</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label>参加方法</Label>
+            <Select value={form.join_policy} onValueChange={(v) => setForm({ ...form, join_policy: v as "open" | "request" })}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="open">誰でも参加できる</SelectItem>
+                <SelectItem value="request">参加申請制</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <Button onClick={() => update.mutate()} disabled={update.isPending}>
+          保存
+        </Button>
       </div>
-      <Button onClick={() => update.mutate()} disabled={update.isPending}>
-        保存
-      </Button>
+
+      {isOwner && (
+        <div className="space-y-4 rounded-2xl border border-destructive/30 bg-card p-6">
+          <div className="flex items-center gap-2 text-destructive">
+            <AlertTriangle className="size-5" />
+            <h3 className="font-semibold">危険な操作</h3>
+          </div>
+          <p className="text-sm text-muted-foreground">これらの操作は取り消せません。慎重に行ってください。</p>
+
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between rounded-xl border p-4">
+            <div>
+              <p className="font-medium">オーナーを移譲</p>
+              <p className="text-sm text-muted-foreground">別のメンバーにオーナー権限を渡します。あなたは管理者になります。</p>
+            </div>
+            <Dialog open={transferOpen} onOpenChange={setTransferOpen}>
+              <DialogTrigger asChild>
+                <Button variant="secondary">
+                  <Crown className="mr-1.5 size-4" /> オーナーを移譲
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-h-[85vh] max-w-lg overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>オーナーを移譲するメンバーを選択</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-2">
+                  {transferCandidates.length === 0 && (
+                    <EmptyState icon={UserPlus} title="移譲できるメンバーがいません" body="オーナー以外のメンバーが必要です。" />
+                  )}
+                  {transferCandidates.map((m) => (
+                    <button
+                      key={m.user_id}
+                      onClick={() => setTransferTarget(m.user_id)}
+                      className={`flex w-full items-center justify-between rounded-xl border p-3 text-left transition ${
+                        transferTarget === m.user_id ? "border-primary bg-primary/5" : "hover:bg-muted/50"
+                      }`}
+                    >
+                      <span className="flex min-w-0 items-center gap-3">
+                        <UserAvatar name={m.profile.display_name} avatarUrl={m.profile.avatar_url} />
+                        <span className="min-w-0">
+                          <span className="block truncate font-medium">{m.profile.display_name}</span>
+                          <span className="block truncate text-xs text-muted-foreground">@{m.profile.username}</span>
+                        </span>
+                      </span>
+                      {transferTarget === m.user_id && <Check className="size-4 text-primary" />}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button variant="secondary" onClick={() => { setTransferOpen(false); setTransferTarget(null); }}>
+                    キャンセル
+                  </Button>
+                  <Button
+                    variant="default"
+                    disabled={!transferTarget || transfer.isPending}
+                    onClick={() => transferTarget && transfer.mutate(transferTarget)}
+                  >
+                    移譲する
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </div>
+
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between rounded-xl border border-destructive/30 p-4">
+            <div>
+              <p className="font-medium text-destructive">コミュニティを削除</p>
+              <p className="text-sm text-muted-foreground">すべてのデータ（チャンネル、メッセージ、メンバー、イベントなど）が完全に削除されます。</p>
+            </div>
+            <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+              <DialogTrigger asChild>
+                <Button variant="destructive">
+                  <Trash className="mr-1.5 size-4" /> 削除
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-lg">
+                <DialogHeader>
+                  <DialogTitle className="text-destructive">コミュニティを削除しますか？</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <p className="text-sm text-muted-foreground">
+                    この操作は取り消せません。すべてのチャンネル、メッセージ、メンバー、イベントが削除されます。
+                  </p>
+                  <div className="rounded-lg bg-muted p-3 text-sm">
+                    確認のため「<span className="font-semibold">{community.data.name}</span>」と入力してください。
+                  </div>
+                  <Input
+                    value={deleteConfirm}
+                    onChange={(e) => setDeleteConfirm(e.target.value)}
+                    placeholder={community.data.name}
+                  />
+                  <div className="flex justify-end gap-2">
+                    <Button variant="secondary" onClick={() => { setDeleteOpen(false); setDeleteConfirm(""); }}>
+                      キャンセル
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      disabled={deleteConfirm !== community.data.name || remove.isPending}
+                      onClick={() => remove.mutate()}
+                    >
+                      削除する
+                    </Button>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
