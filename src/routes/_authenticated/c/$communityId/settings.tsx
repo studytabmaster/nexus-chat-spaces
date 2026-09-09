@@ -82,7 +82,7 @@ function CommunitySettingsPage() {
             <TabsTrigger value="audit">監査ログ</TabsTrigger>
           </TabsList>
           <TabsContent value="general">
-            <GeneralSettings communityId={communityId} />
+            <GeneralSettings communityId={communityId} myRole={role} />
           </TabsContent>
           <TabsContent value="channels">
             <ChannelManager communityId={communityId} />
