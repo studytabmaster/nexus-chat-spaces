@@ -117,7 +117,7 @@ function CommunitySettingsPage() {
   );
 }
 
-function GeneralSettings({ communityId }: { communityId: string }) {
+function GeneralSettings({ communityId, myRole }: { communityId: string; myRole: "owner" | "admin" | "moderator" | "member" | undefined }) {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const me = useMe();
