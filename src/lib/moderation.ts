@@ -46,6 +46,11 @@ export async function transferOwnership(communityId: string, newOwner: string) {
   if (error) throw error;
 }
 
+export async function deleteCommunity(communityId: string) {
+  const { error } = await supabase.from("communities").delete().eq("id", communityId);
+  if (error) throw error;
+}
+
 export type BanRow = {
   id: string;
   user_id: string;
