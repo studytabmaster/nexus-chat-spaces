@@ -5,7 +5,6 @@ import { ChatView, type ChatMessage } from "@/components/app/ChatView";
 import { ThreadPanel } from "@/components/app/ThreadPanel";
 import { VoiceChannelView } from "@/components/app/VoiceChannelView";
 import { channelsQuery, membersQuery } from "@/lib/queries";
-import { channelTypeMeta } from "@/lib/channels";
 import { useMembership } from "@/components/app/JoinButton";
 import { EmptyState, LoadingState } from "@/components/app/EmptyState";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
@@ -114,6 +113,3 @@ function ChannelPage() {
     </div>
   );
 }
-
-/** 使わない参照を避けるための型ヘルパ（チャンネル種別アイコン用） */
-export const _channelTypeMeta = channelTypeMeta;
