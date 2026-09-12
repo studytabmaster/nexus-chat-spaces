@@ -118,32 +118,89 @@ export type Database = {
           },
         ]
       }
+      channel_prefs: {
+        Row: {
+          channel_id: string
+          created_at: string
+          favorite: boolean
+          id: string
+          last_read_at: string
+          muted: boolean
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          channel_id: string
+          created_at?: string
+          favorite?: boolean
+          id?: string
+          last_read_at?: string
+          muted?: boolean
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          channel_id?: string
+          created_at?: string
+          favorite?: boolean
+          id?: string
+          last_read_at?: string
+          muted?: boolean
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "channel_prefs_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "channels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "channel_prefs_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       channels: {
         Row: {
+          archived: boolean
           category_id: string | null
           community_id: string
           created_at: string
           id: string
+          locked: boolean
           name: string
           position: number
+          topic: string
           type: string
         }
         Insert: {
+          archived?: boolean
           category_id?: string | null
           community_id: string
           created_at?: string
           id?: string
+          locked?: boolean
           name: string
           position?: number
+          topic?: string
           type?: string
         }
         Update: {
+          archived?: boolean
           category_id?: string | null
           community_id?: string
           created_at?: string
           id?: string
+          locked?: boolean
           name?: string
           position?: number
+          topic?: string
           type?: string
         }
         Relationships: [
