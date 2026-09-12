@@ -1,14 +1,17 @@
 import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { Hash, ChevronDown, FileText, CheckSquare, Settings, Users, BadgeCheck, Menu, PanelRight, Home, CalendarDays, CalendarRange, ImageIcon } from "lucide-react";
-import { communityQuery, channelsQuery, membersQuery } from "@/lib/queries";
+import { ChevronDown, FileText, CheckSquare, Settings, Users, BadgeCheck, Menu, PanelRight, Home, CalendarDays, CalendarRange, ImageIcon, Star, Bell, BellOff, Lock, Archive, Plus } from "lucide-react";
+import { communityQuery, channelsQuery, membersQuery, type Channel } from "@/lib/queries";
+import { channelPrefsQuery, channelTypeMeta, useSetChannelPref } from "@/lib/channels";
+import { useMe } from "@/lib/auth";
 import { useMembership } from "@/components/app/JoinButton";
 import { CommunityIcon } from "@/components/app/CommunityIcon";
 import { WelcomeDialog } from "@/components/app/WelcomeDialog";
 import { MemberList } from "@/components/app/MemberList";
 import { LoadingState, ErrorState, EmptyState } from "@/components/app/EmptyState";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -99,11 +102,32 @@ function ChannelSidebar({
 }) {
   const data = useQuery(channelsQuery(communityId));
   const members = useQuery(membersQuery(communityId));
+  const me = useMe();
+  const prefs = useQuery(channelPrefsQuery(me.data?.id));
+  const setPref = useSetChannelPref(me.data?.id);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const [showArchived, setShowArchived] = useState(false);
 
   const cats = data.data?.categories ?? [];
-  const chans = data.data?.channels ?? [];
-  const uncategorized = chans.filter((c) => !c.category_id || !cats.some((k) => k.id === c.category_id));
+  const all = data.data?.channels ?? [];
+  const prefOf = (id: string) => prefs.data?.find((p) => p.channel_id === id);
+  const active = all.filter((c) => !c.archived);
+  const archived = all.filter((c) => c.archived);
+  const favorites = active.filter((c) => prefOf(c.id)?.favorite);
+  const uncategorized = active.filter((c) => !c.category_id || !cats.some((k) => k.id === c.category_id));
+
+  const renderChannel = (ch: Channel) => (
+    <ChannelLink
+      key={ch.id}
+      communityId={communityId}
+      channel={ch}
+      favorite={!!prefOf(ch.id)?.favorite}
+      muted={!!prefOf(ch.id)?.muted}
+      canTogglePrefs={isMember && !!me.data}
+      onTogglePref={(patch) => setPref.mutate({ channelId: ch.id, patch })}
+      onClick={onNavigate}
+    />
+  );
 
   return (
     <div className="flex h-full flex-col">
@@ -126,8 +150,16 @@ function ChannelSidebar({
         {canManage && <SideLink to="/c/$communityId/settings" params={{ communityId }} icon={Settings} label="設定" onClick={onNavigate} />}
 
         <div className="mt-3 space-y-3">
+          {favorites.length > 0 && (
+            <div>
+              <p className="flex items-center gap-1 px-2 py-1 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                <Star className="size-3" /> お気に入り
+              </p>
+              {favorites.map(renderChannel)}
+            </div>
+          )}
           {cats.map((cat) => {
-            const list = chans.filter((c) => c.category_id === cat.id);
+            const list = active.filter((c) => c.category_id === cat.id);
             const isCollapsed = collapsed[cat.id];
             return (
               <div key={cat.id}>
@@ -138,19 +170,32 @@ function ChannelSidebar({
                   <ChevronDown className={cn("size-3 transition-transform", isCollapsed && "-rotate-90")} />
                   {cat.name}
                 </button>
-                {!isCollapsed &&
-                  list.map((ch) => (
-                    <ChannelLink key={ch.id} communityId={communityId} channelId={ch.id} name={ch.name} onClick={onNavigate} />
-                  ))}
+                {!isCollapsed && list.map(renderChannel)}
               </div>
             );
           })}
-          {uncategorized.length > 0 && (
+          {uncategorized.length > 0 && <div>{uncategorized.map(renderChannel)}</div>}
+          {archived.length > 0 && (
             <div>
-              {uncategorized.map((ch) => (
-                <ChannelLink key={ch.id} communityId={communityId} channelId={ch.id} name={ch.name} onClick={onNavigate} />
-              ))}
+              <button
+                onClick={() => setShowArchived((v) => !v)}
+                className="flex w-full items-center gap-1 px-2 py-1 text-[11px] font-bold uppercase tracking-wider text-muted-foreground hover:text-foreground"
+              >
+                <ChevronDown className={cn("size-3 transition-transform", !showArchived && "-rotate-90")} />
+                アーカイブ
+              </button>
+              {showArchived && archived.map(renderChannel)}
             </div>
+          )}
+          {canManage && (
+            <Link
+              to="/c/$communityId/settings"
+              params={{ communityId }}
+              onClick={onNavigate}
+              className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"
+            >
+              <Plus className="size-4" /> チャンネルを追加
+            </Link>
           )}
         </div>
       </nav>
@@ -161,17 +206,64 @@ function ChannelSidebar({
   );
 }
 
-function ChannelLink({ communityId, channelId, name, onClick }: { communityId: string; channelId: string; name: string; onClick: () => void }) {
-  return (
+function ChannelLink({
+  communityId,
+  channel,
+  favorite,
+  muted,
+  canTogglePrefs,
+  onTogglePref,
+  onClick,
+}: {
+  communityId: string;
+  channel: Channel;
+  favorite: boolean;
+  muted: boolean;
+  canTogglePrefs: boolean;
+  onTogglePref: (patch: { favorite?: boolean; muted?: boolean }) => void;
+  onClick: () => void;
+}) {
+  const Icon = channelTypeMeta(channel.type).icon;
+  const link = (
     <Link
       to="/c/$communityId/ch/$channelId"
-      params={{ communityId, channelId }}
+      params={{ communityId, channelId: channel.id }}
       onClick={onClick}
-      className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"
+      className={cn(
+        "flex items-center gap-1.5 rounded-md px-2 py-1.5 text-muted-foreground hover:bg-sidebar-accent hover:text-foreground",
+        muted && "opacity-50",
+      )}
       activeProps={{ className: "bg-sidebar-accent text-foreground font-medium" }}
     >
-      <Hash className="size-4 shrink-0 opacity-60" /> <span className="truncate">{name}</span>
+      <Icon className="size-4 shrink-0 opacity-60" />
+      <span className="truncate">{channel.name}</span>
+      {channel.archived ? (
+        <Archive className="ml-auto size-3 shrink-0 opacity-60" />
+      ) : channel.locked ? (
+        <Lock className="ml-auto size-3 shrink-0 opacity-60" />
+      ) : muted ? (
+        <BellOff className="ml-auto size-3 shrink-0 opacity-60" />
+      ) : favorite ? (
+        <Star className="ml-auto size-3 shrink-0 opacity-60" />
+      ) : null}
     </Link>
+  );
+
+  if (!canTogglePrefs) return link;
+
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger asChild>{link}</ContextMenuTrigger>
+      <ContextMenuContent className="w-52">
+        <ContextMenuItem onSelect={() => onTogglePref({ favorite: !favorite })}>
+          <Star className="mr-2 size-4" /> {favorite ? "お気に入りから外す" : "お気に入りに追加"}
+        </ContextMenuItem>
+        <ContextMenuItem onSelect={() => onTogglePref({ muted: !muted })}>
+          {muted ? <Bell className="mr-2 size-4" /> : <BellOff className="mr-2 size-4" />}
+          {muted ? "通知をオンにする" : "このチャンネルをミュート"}
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
   );
 }
 

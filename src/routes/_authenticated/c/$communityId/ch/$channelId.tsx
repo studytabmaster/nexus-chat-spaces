@@ -3,11 +3,12 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { ChatView, type ChatMessage } from "@/components/app/ChatView";
 import { ThreadPanel } from "@/components/app/ThreadPanel";
+import { VoiceChannelView } from "@/components/app/VoiceChannelView";
 import { channelsQuery, membersQuery } from "@/lib/queries";
 import { useMembership } from "@/components/app/JoinButton";
 import { EmptyState, LoadingState } from "@/components/app/EmptyState";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
-import { Hash } from "lucide-react";
+import { Hash, Lock, Archive } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/c/$communityId/ch/$channelId")({
   head: () => ({
@@ -37,9 +38,16 @@ function ChannelPage() {
       </div>
     );
   const role = membership.data?.role ?? null;
-  const canPost = !!role;
   const canModerate = role === "owner" || role === "admin" || role === "moderator";
+  const locked = channel.locked || channel.archived;
+  const canPost = !!role && (!locked || canModerate);
   const memberProfiles = members.data?.map((m) => m.profile);
+  const categoryName = data.data?.categories.find((k) => k.id === channel.category_id)?.name;
+  const subtitle = [channel.topic || null, categoryName || null].filter(Boolean).join(" · ") || undefined;
+
+  if (channel.type === "voice") {
+    return <VoiceChannelView name={channel.name} topic={channel.topic} isMember={!!role} />;
+  }
 
   return (
     <div className="flex h-full min-h-0">
@@ -48,9 +56,27 @@ function ChannelPage() {
           key={channelId}
           source={{ kind: "channel", channelId, communityId, canPost, canModerate }}
           title={channel.name}
-          subtitle={data.data?.categories.find((k) => k.id === channel.category_id)?.name}
+          subtitle={subtitle}
           members={memberProfiles}
           onOpenThread={(m) => setThread(m)}
+          postDisabledNote={
+            !role
+              ? undefined
+              : channel.archived
+                ? "このチャンネルはアーカイブされています（閲覧のみ）"
+                : "このチャンネルはロックされています（閲覧のみ）"
+          }
+          headerExtra={
+            channel.archived ? (
+              <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                <Archive className="size-3.5" /> アーカイブ
+              </span>
+            ) : channel.locked ? (
+              <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                <Lock className="size-3.5" /> ロック中
+              </span>
+            ) : null
+          }
         />
       </div>
 
