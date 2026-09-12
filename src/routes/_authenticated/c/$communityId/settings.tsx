@@ -602,7 +602,7 @@ function ChannelManager({ communityId }: { communityId: string }) {
                 <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">{meta.label}</span>
                 {ch.locked && (
                   <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                    <Lock className="size-3" /> 閲覧のみ
+                    <LockIcon className="size-3" /> 閲覧のみ
                   </span>
                 )}
                 {ch.archived && (
