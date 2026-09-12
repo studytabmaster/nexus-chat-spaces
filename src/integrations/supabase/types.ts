@@ -14,6 +14,36 @@ export type Database = {
   }
   public: {
     Tables: {
+      achievement_defs: {
+        Row: {
+          description: string
+          icon: string
+          key: string
+          kind: string
+          name: string
+          points: number
+          threshold: number
+        }
+        Insert: {
+          description?: string
+          icon?: string
+          key: string
+          kind?: string
+          name: string
+          points?: number
+          threshold?: number
+        }
+        Update: {
+          description?: string
+          icon?: string
+          key?: string
+          kind?: string
+          name?: string
+          points?: number
+          threshold?: number
+        }
+        Relationships: []
+      }
       audit_logs: {
         Row: {
           action: string
@@ -670,6 +700,44 @@ export type Database = {
           },
         ]
       }
+      fraud_flags: {
+        Row: {
+          created_at: string
+          detail: string
+          id: string
+          kind: string
+          status: string
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          detail?: string
+          id?: string
+          kind: string
+          status?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          detail?: string
+          id?: string
+          kind?: string
+          status?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fraud_flags_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       friendships: {
         Row: {
           addressee_id: string
@@ -706,6 +774,64 @@ export type Database = {
           {
             foreignKeyName: "friendships_requester_id_fkey"
             columns: ["requester_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      invite_referrals: {
+        Row: {
+          community_id: string | null
+          confirmed_at: string | null
+          created_at: string
+          id: string
+          invite_code: string
+          invitee_id: string
+          inviter_id: string
+          note: string
+          status: string
+        }
+        Insert: {
+          community_id?: string | null
+          confirmed_at?: string | null
+          created_at?: string
+          id?: string
+          invite_code?: string
+          invitee_id: string
+          inviter_id: string
+          note?: string
+          status?: string
+        }
+        Update: {
+          community_id?: string | null
+          confirmed_at?: string | null
+          created_at?: string
+          id?: string
+          invite_code?: string
+          invitee_id?: string
+          inviter_id?: string
+          note?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invite_referrals_community_id_fkey"
+            columns: ["community_id"]
+            isOneToOne: false
+            referencedRelation: "communities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invite_referrals_invitee_id_fkey"
+            columns: ["invitee_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invite_referrals_inviter_id_fkey"
+            columns: ["inviter_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -922,6 +1048,84 @@ export type Database = {
           },
         ]
       }
+      mission_defs: {
+        Row: {
+          active: boolean
+          description: string
+          key: string
+          name: string
+          points: number
+          position: number
+          rule_key: string
+          target: number
+        }
+        Insert: {
+          active?: boolean
+          description?: string
+          key: string
+          name: string
+          points?: number
+          position?: number
+          rule_key: string
+          target?: number
+        }
+        Update: {
+          active?: boolean
+          description?: string
+          key?: string
+          name?: string
+          points?: number
+          position?: number
+          rule_key?: string
+          target?: number
+        }
+        Relationships: []
+      }
+      mission_progress: {
+        Row: {
+          claimed: boolean
+          created_at: string
+          day: string
+          id: string
+          mission_key: string
+          progress: number
+          user_id: string
+        }
+        Insert: {
+          claimed?: boolean
+          created_at?: string
+          day?: string
+          id?: string
+          mission_key: string
+          progress?: number
+          user_id: string
+        }
+        Update: {
+          claimed?: boolean
+          created_at?: string
+          day?: string
+          id?: string
+          mission_key?: string
+          progress?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mission_progress_mission_key_fkey"
+            columns: ["mission_key"]
+            isOneToOne: false
+            referencedRelation: "mission_defs"
+            referencedColumns: ["key"]
+          },
+          {
+            foreignKeyName: "mission_progress_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       moderation_actions: {
         Row: {
           action: string
@@ -1020,6 +1224,109 @@ export type Database = {
             foreignKeyName: "notifications_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      point_events: {
+        Row: {
+          created_at: string
+          dedupe_key: string | null
+          delta: number
+          id: string
+          label: string
+          reason: string
+          source_id: string | null
+          source_type: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          dedupe_key?: string | null
+          delta: number
+          id?: string
+          label?: string
+          reason: string
+          source_id?: string | null
+          source_type?: string
+          status?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          dedupe_key?: string | null
+          delta?: number
+          id?: string
+          label?: string
+          reason?: string
+          source_id?: string | null
+          source_type?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "point_events_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      point_rules: {
+        Row: {
+          created_at: string
+          daily_cap: number | null
+          key: string
+          label: string
+          points: number
+        }
+        Insert: {
+          created_at?: string
+          daily_cap?: number | null
+          key: string
+          label: string
+          points: number
+        }
+        Update: {
+          created_at?: string
+          daily_cap?: number | null
+          key?: string
+          label?: string
+          points?: number
+        }
+        Relationships: []
+      }
+      point_wallets: {
+        Row: {
+          balance: number
+          created_at: string
+          lifetime: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          balance?: number
+          created_at?: string
+          lifetime?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          balance?: number
+          created_at?: string
+          lifetime?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "point_wallets_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
@@ -1412,6 +1719,157 @@ export type Database = {
           },
         ]
       }
+      service_audit_logs: {
+        Row: {
+          action: string
+          actor_id: string | null
+          created_at: string
+          detail: string
+          id: string
+          target: string
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          created_at?: string
+          detail?: string
+          id?: string
+          target?: string
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          created_at?: string
+          detail?: string
+          id?: string
+          target?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "service_audit_logs_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      shop_items: {
+        Row: {
+          ai_generated: boolean
+          created_at: string
+          created_by: string | null
+          description: string
+          ends_at: string | null
+          id: string
+          image_url: string | null
+          kind: string
+          name: string
+          payload: string
+          price: number
+          published: boolean
+          restock_count: number
+          review_status: string
+          season: string
+          sold: number
+          starts_at: string | null
+          stock: number | null
+          updated_at: string
+        }
+        Insert: {
+          ai_generated?: boolean
+          created_at?: string
+          created_by?: string | null
+          description?: string
+          ends_at?: string | null
+          id?: string
+          image_url?: string | null
+          kind: string
+          name: string
+          payload?: string
+          price: number
+          published?: boolean
+          restock_count?: number
+          review_status?: string
+          season?: string
+          sold?: number
+          starts_at?: string | null
+          stock?: number | null
+          updated_at?: string
+        }
+        Update: {
+          ai_generated?: boolean
+          created_at?: string
+          created_by?: string | null
+          description?: string
+          ends_at?: string | null
+          id?: string
+          image_url?: string | null
+          kind?: string
+          name?: string
+          payload?: string
+          price?: number
+          published?: boolean
+          restock_count?: number
+          review_status?: string
+          season?: string
+          sold?: number
+          starts_at?: string | null
+          stock?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shop_items_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      shop_purchases: {
+        Row: {
+          created_at: string
+          equipped: boolean
+          id: string
+          item_id: string
+          price_paid: number
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          equipped?: boolean
+          id?: string
+          item_id: string
+          price_paid: number
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          equipped?: boolean
+          id?: string
+          item_id?: string
+          price_paid?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shop_purchases_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "shop_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shop_purchases_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tasks: {
         Row: {
           assigned_to: string | null
@@ -1467,6 +1925,42 @@ export type Database = {
           {
             foreignKeyName: "tasks_created_by_fkey"
             columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_achievements: {
+        Row: {
+          achievement_key: string
+          id: string
+          unlocked_at: string
+          user_id: string
+        }
+        Insert: {
+          achievement_key: string
+          id?: string
+          unlocked_at?: string
+          user_id: string
+        }
+        Update: {
+          achievement_key?: string
+          id?: string
+          unlocked_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_achievements_achievement_key_fkey"
+            columns: ["achievement_key"]
+            isOneToOne: false
+            referencedRelation: "achievement_defs"
+            referencedColumns: ["key"]
+          },
+          {
+            foreignKeyName: "user_achievements_user_id_fkey"
+            columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -1532,6 +2026,18 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      award_points: {
+        Args: {
+          _dedupe_key?: string
+          _label: string
+          _points: number
+          _rule_key: string
+          _source_id?: string
+          _source_type?: string
+          _user_id: string
+        }
+        Returns: number
+      }
       can_manage: {
         Args: { _community_id: string; _user_id: string }
         Returns: boolean
@@ -1544,10 +2050,12 @@ export type Database = {
         Args: { _community_id: string; _user_id: string }
         Returns: boolean
       }
+      claim_mission: { Args: { _key: string }; Returns: number }
       community_role_of: {
         Args: { _community_id: string; _user_id: string }
         Returns: Database["public"]["Enums"]["community_role"]
       }
+      confirm_referral: { Args: { _invitee: string }; Returns: undefined }
       ensure_profile: {
         Args: never
         Returns: {
@@ -1568,6 +2076,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      equip_shop_item: {
+        Args: { _equip: boolean; _item_id: string }
+        Returns: undefined
       }
       has_role: {
         Args: {
@@ -1604,12 +2116,34 @@ export type Database = {
         }
         Returns: undefined
       }
+      point_level: { Args: { _lifetime: number }; Returns: number }
+      points_leaderboard: {
+        Args: { _limit?: number }
+        Returns: {
+          avatar_url: string
+          display_name: string
+          level: number
+          lifetime: number
+          user_id: string
+          username: string
+        }[]
+      }
+      purchase_shop_item: { Args: { _item_id: string }; Returns: string }
+      record_activity: {
+        Args: { _kind: string; _ref_id?: string }
+        Returns: number
+      }
       redeem_invite: { Args: { _code: string }; Returns: string }
       review_join_request: {
         Args: { _approve: boolean; _request_id: string }
         Returns: undefined
       }
+      revoke_points: {
+        Args: { _points: number; _reason: string; _user_id: string }
+        Returns: undefined
+      }
       start_dm: { Args: { _other: string }; Returns: string }
+      sync_achievements: { Args: { _user_id: string }; Returns: undefined }
       transfer_ownership: {
         Args: { _community_id: string; _new_owner: string }
         Returns: undefined
