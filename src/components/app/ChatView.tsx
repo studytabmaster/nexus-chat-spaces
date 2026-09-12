@@ -71,6 +71,7 @@ export function ChatView({
   threadRootId,
   onOpenThread,
   compact,
+  postDisabledNote,
 }: {
   source: Source;
   title: string;
@@ -81,6 +82,8 @@ export function ChatView({
   threadRootId?: string | undefined;
   onOpenThread?: ((m: ChatMessage) => void) | undefined;
   compact?: boolean | undefined;
+  /** 投稿できない理由の説明文（未指定なら参加を促す文言） */
+  postDisabledNote?: string | undefined;
 }) {
   const me = useMe();
   const qc = useQueryClient();
@@ -711,7 +714,7 @@ export function ChatView({
       <div className="shrink-0 border-t bg-background p-3">
         {!canPost ? (
           <div className="flex items-center justify-center gap-2 rounded-xl border border-dashed py-3 text-sm text-muted-foreground">
-            <Lock className="size-4" /> メッセージを送るにはコミュニティに参加してください
+            <Lock className="size-4" /> {postDisabledNote ?? "メッセージを送るにはコミュニティに参加してください"}
           </div>
         ) : (
           <div className="relative rounded-xl border bg-card focus-within:ring-1 focus-within:ring-ring">
