@@ -125,6 +125,82 @@ function CommunitySettingsPage() {
   );
 }
 
+function StatCard({
+  icon: Icon,
+  label,
+  value,
+  sub,
+  accent,
+}: {
+  icon: typeof Users;
+  label: string;
+  value: number;
+  sub?: string;
+  accent?: boolean;
+}) {
+  return (
+    <div className="rounded-xl border bg-card p-4">
+      <div className="flex items-center gap-2 text-muted-foreground">
+        <Icon className={`size-4 ${accent && value > 0 ? "text-destructive" : ""}`} />
+        <span className="text-xs">{label}</span>
+      </div>
+      <p className={`mt-2 text-3xl font-semibold tabular-nums ${accent && value > 0 ? "text-destructive" : ""}`}>
+        {value.toLocaleString()}
+      </p>
+      {sub && <p className="mt-1 text-xs text-muted-foreground">{sub}</p>}
+    </div>
+  );
+}
+
+function Dashboard({ communityId }: { communityId: string }) {
+  useDashboardRealtime(communityId);
+  const stats = useQuery(dashboardQuery(communityId));
+
+  if (stats.isLoading) return <LoadingState />;
+  if (stats.error) return <ErrorState message="ダッシュボードを読み込めませんでした" />;
+  const d = stats.data!;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <span className="inline-block size-2 animate-pulse rounded-full bg-emerald-500" />
+        リアルタイム更新中
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard
+          icon={Users}
+          label="メンバー数"
+          value={d.memberCount}
+          sub={`オーナー・管理者 ${(d.roleCounts.owner ?? 0) + (d.roleCounts.admin ?? 0)}人 / モデレーター ${d.roleCounts.moderator ?? 0}人`}
+        />
+        <StatCard icon={Wifi} label="オンライン" value={d.onlineCount} sub="オンライン表示を許可している人のみ" />
+        <StatCard icon={Flag} label="未対応の通報" value={d.openReports} sub="「通報」タブで対応できます" accent />
+        <StatCard icon={UserPlus2} label="新規参加（24時間）" value={d.joined24h} sub={`7日間で ${d.joined7d}人`} />
+      </div>
+
+      <div className="rounded-xl border bg-card p-4">
+        <p className="mb-3 text-sm font-medium">最近参加したメンバー</p>
+        {d.recentJoins.length === 0 ? (
+          <p className="text-sm text-muted-foreground">まだ参加者がいません。</p>
+        ) : (
+          <div className="space-y-2">
+            {d.recentJoins.map((m) => (
+              <div key={m.user_id} className="flex items-center gap-3">
+                <UserAvatar name={m.display_name} avatarUrl={m.avatar_url} status={m.status} showStatus />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium">{m.display_name}</p>
+                  <p className="truncate text-xs text-muted-foreground">@{m.username}</p>
+                </div>
+                <span className="text-xs text-muted-foreground">{chatTime(m.joined_at)}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function GeneralSettings({ communityId, myRole }: { communityId: string; myRole: "owner" | "admin" | "moderator" | "member" | undefined }) {
   const navigate = useNavigate();
   const qc = useQueryClient();
