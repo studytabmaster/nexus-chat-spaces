@@ -26,6 +26,9 @@ import { uploadFile } from "@/lib/storage";
 import { useMe } from "@/lib/auth";
 import { shortDate } from "@/lib/format";
 import { MemberManagePanel } from "@/components/app/MemberManagePanel";
+import { dashboardQuery, useDashboardRealtime } from "@/lib/dashboard";
+import { chatTime } from "@/lib/format";
+import { Users, Wifi, UserPlus2 } from "lucide-react";
 import {
   bansQuery,
   auditLogsQuery,
