@@ -18,7 +18,7 @@ type SignalPayload = {
   from: string;
   to: string;
   kind: "offer" | "answer" | "candidate";
-  sdp?: { type: RTCSdpType; sdp?: string };
+  sdp?: { type: RTCSdpType; sdp?: string | undefined };
   candidate?: RTCIceCandidateInit;
 };
 
@@ -118,6 +118,7 @@ export function useVoiceRoom(opts: {
       };
       pc.ontrack = (e) => {
         const stream = e.streams[0];
+        if (!stream) return;
         let el = audioRef.current.get(peerId);
         if (!el) {
           el = document.createElement("audio");
