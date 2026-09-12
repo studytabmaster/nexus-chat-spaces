@@ -26,7 +26,7 @@ export function VoiceChannelView({ name, topic, isMember }: { name: string; topi
             <div className="flex flex-wrap items-center justify-center gap-4">
               <div className="flex w-28 flex-col items-center gap-2">
                 <div className={cn("rounded-full p-1 ring-2", muted ? "ring-muted" : "ring-primary")}>
-                  <UserAvatar profile={me.data ?? null} className="size-16" />
+                  <UserAvatar name={me.data?.display_name ?? "あなた"} avatarUrl={me.data?.avatar_url} size="lg" />
                 </div>
                 <span className="truncate text-sm font-medium">{me.data?.display_name ?? "あなた"}</span>
               </div>
