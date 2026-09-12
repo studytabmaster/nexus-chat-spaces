@@ -451,7 +451,12 @@ function ChannelManager({ communityId }: { communityId: string }) {
   const qc = useQueryClient();
   const channels = useQuery(channelsQuery(communityId));
   const [newChan, setNewChan] = useState("");
+  const [newType, setNewType] = useState<ChannelType>("text");
+  const [newCatId, setNewCatId] = useState<string>("none");
   const [newCat, setNewCat] = useState("");
+  const [editing, setEditing] = useState<Channel | null>(null);
+
+  const invalidate = () => qc.invalidateQueries({ queryKey: ["channels", communityId] });
 
   const createChannel = useMutation({
     mutationFn: async () => {
@@ -459,7 +464,8 @@ function ChannelManager({ communityId }: { communityId: string }) {
       const { error } = await supabase.from("channels").insert({
         community_id: communityId,
         name: newChan.trim(),
-        type: "text",
+        type: newType,
+        category_id: newCatId === "none" ? null : newCatId,
         position: pos,
       });
       if (error) throw error;
@@ -467,7 +473,7 @@ function ChannelManager({ communityId }: { communityId: string }) {
     onSuccess: () => {
       toast.success("チャンネルを作成しました");
       setNewChan("");
-      qc.invalidateQueries({ queryKey: ["channels", communityId] });
+      invalidate();
     },
     onError: (e) => toast.error(e.message),
   });
@@ -481,7 +487,20 @@ function ChannelManager({ communityId }: { communityId: string }) {
     onSuccess: () => {
       toast.success("カテゴリーを作成しました");
       setNewCat("");
-      qc.invalidateQueries({ queryKey: ["channels", communityId] });
+      invalidate();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const updateChannel = useMutation({
+    mutationFn: async ({ id, patch }: { id: string; patch: Partial<Pick<Channel, "name" | "topic" | "type" | "category_id" | "locked" | "archived">> }) => {
+      const { error } = await supabase.from("channels").update(patch).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("チャンネルを更新しました");
+      setEditing(null);
+      invalidate();
     },
     onError: (e) => toast.error(e.message),
   });
@@ -491,24 +510,61 @@ function ChannelManager({ communityId }: { communityId: string }) {
       const { error } = await supabase.from("channels").delete().eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["channels", communityId] }),
+    onSuccess: invalidate,
+    onError: (e) => toast.error(e.message),
+  });
+
+  const removeCategory = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("categories").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: invalidate,
     onError: (e) => toast.error(e.message),
   });
 
   if (channels.isLoading) return <LoadingState />;
   if (channels.isError) return <ErrorState message={channels.error.message} onRetry={() => channels.refetch()} />;
 
+  const cats = channels.data?.categories ?? [];
+
   return (
     <div className="space-y-4">
       <div className="rounded-2xl border bg-card p-6">
         <h3 className="mb-3 font-semibold">新しいチャンネル</h3>
-        <div className="flex gap-2">
+        <div className="grid gap-2 sm:grid-cols-[1fr_auto_auto_auto]">
           <Input value={newChan} onChange={(e) => setNewChan(e.target.value)} placeholder="チャンネル名" />
+          <Select value={newType} onValueChange={(v) => setNewType(v as ChannelType)}>
+            <SelectTrigger className="sm:w-36">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {CHANNEL_TYPES.map((t) => (
+                <SelectItem key={t.value} value={t.value}>
+                  {t.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={newCatId} onValueChange={setNewCatId}>
+            <SelectTrigger className="sm:w-40">
+              <SelectValue placeholder="カテゴリーなし" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">カテゴリーなし</SelectItem>
+              {cats.map((c) => (
+                <SelectItem key={c.id} value={c.id}>
+                  {c.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Button onClick={() => createChannel.mutate()} disabled={!newChan.trim() || createChannel.isPending}>
             <Plus className="size-4" />
           </Button>
         </div>
       </div>
+
       <div className="rounded-2xl border bg-card p-6">
         <h3 className="mb-3 font-semibold">新しいカテゴリー</h3>
         <div className="flex gap-2">
@@ -517,19 +573,137 @@ function ChannelManager({ communityId }: { communityId: string }) {
             <Plus className="size-4" />
           </Button>
         </div>
-      </div>
-      <div className="space-y-2">
-        {channels.data?.channels.map((ch) => (
-          <div key={ch.id} className="flex items-center justify-between rounded-xl border bg-card p-3">
-            <span className="flex items-center gap-2">
-              <Hash className="size-4 text-muted-foreground" /> {ch.name}
-            </span>
-            <button onClick={() => removeChannel.mutate(ch.id)} className="text-muted-foreground hover:text-destructive" aria-label="削除">
-              <Trash2 className="size-4" />
-            </button>
+        {cats.length > 0 && (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {cats.map((c) => (
+              <span key={c.id} className="flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm">
+                {c.name}
+                <button onClick={() => removeCategory.mutate(c.id)} className="text-muted-foreground hover:text-destructive" aria-label="カテゴリーを削除">
+                  <X className="size-3.5" />
+                </button>
+              </span>
+            ))}
           </div>
-        ))}
+        )}
       </div>
+
+      <div className="space-y-2">
+        {channels.data?.channels.map((ch) => {
+          const meta = channelTypeMeta(ch.type);
+          const Icon = meta.icon;
+          return (
+            <div key={ch.id} className="rounded-xl border bg-card p-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="flex min-w-0 items-center gap-2 font-medium">
+                  <Icon className="size-4 shrink-0 text-muted-foreground" />
+                  <span className="truncate">{ch.name}</span>
+                </span>
+                <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">{meta.label}</span>
+                {ch.locked && (
+                  <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                    <Lock className="size-3" /> 閲覧のみ
+                  </span>
+                )}
+                {ch.archived && (
+                  <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                    <Archive className="size-3" /> アーカイブ
+                  </span>
+                )}
+                <div className="ml-auto flex items-center gap-3">
+                  <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    ロック
+                    <Switch checked={ch.locked} onCheckedChange={(v) => updateChannel.mutate({ id: ch.id, patch: { locked: v } })} />
+                  </label>
+                  <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    アーカイブ
+                    <Switch checked={ch.archived} onCheckedChange={(v) => updateChannel.mutate({ id: ch.id, patch: { archived: v } })} />
+                  </label>
+                  <button onClick={() => setEditing(ch)} className="text-muted-foreground hover:text-foreground" aria-label="編集">
+                    <Settings className="size-4" />
+                  </button>
+                  <button onClick={() => removeChannel.mutate(ch.id)} className="text-muted-foreground hover:text-destructive" aria-label="削除">
+                    <Trash2 className="size-4" />
+                  </button>
+                </div>
+              </div>
+              {ch.topic && <p className="mt-1 truncate text-xs text-muted-foreground">{ch.topic}</p>}
+            </div>
+          );
+        })}
+      </div>
+
+      <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>チャンネルを編集</DialogTitle>
+          </DialogHeader>
+          {editing && (
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <Label>チャンネル名</Label>
+                <Input value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>説明（トピック）</Label>
+                <Textarea value={editing.topic} onChange={(e) => setEditing({ ...editing, topic: e.target.value })} rows={2} />
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label>種別</Label>
+                  <Select value={editing.type} onValueChange={(v) => setEditing({ ...editing, type: v })}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CHANNEL_TYPES.map((t) => (
+                        <SelectItem key={t.value} value={t.value}>
+                          {t.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>カテゴリー</Label>
+                  <Select
+                    value={editing.category_id ?? "none"}
+                    onValueChange={(v) => setEditing({ ...editing, category_id: v === "none" ? null : v })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">カテゴリーなし</SelectItem>
+                      {cats.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <Button
+                className="w-full"
+                disabled={!editing.name.trim() || updateChannel.isPending}
+                onClick={() =>
+                  updateChannel.mutate({
+                    id: editing.id,
+                    patch: {
+                      name: editing.name.trim(),
+                      topic: editing.topic,
+                      type: editing.type,
+                      category_id: editing.category_id,
+                    },
+                  })
+                }
+              >
+                保存
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
