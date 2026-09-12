@@ -69,8 +69,9 @@ function CommunitySettingsPage() {
     <div className="h-full overflow-y-auto">
       <div className="mx-auto max-w-4xl px-4 py-6 md:px-8">
         <PageHeader title="Community Settings" subtitle="コミュニティの管理" />
-        <Tabs defaultValue="general">
+        <Tabs defaultValue="dashboard">
           <TabsList className="mb-4 flex-wrap">
+            <TabsTrigger value="dashboard">ダッシュボード</TabsTrigger>
             <TabsTrigger value="general">基本設定</TabsTrigger>
             <TabsTrigger value="channels">チャンネル</TabsTrigger>
             <TabsTrigger value="requests">参加申請</TabsTrigger>
