@@ -16,6 +16,7 @@ import { EmptyState, ErrorState, LoadingState } from "@/components/app/EmptyStat
 import { timeAgo } from "@/lib/format";
 import { uploadFile, useSignedUrl } from "@/lib/storage";
 import { PageHeader } from "@/components/app/PageHeader";
+import { recordActivity } from "@/lib/points";
 
 export const Route = createFileRoute("/_authenticated/c/$communityId/posts")({
   head: () => ({
