@@ -1,7 +1,7 @@
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import { Menu, Search, Bell } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { NavRail } from "./NavRail";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,7 @@ import { Logo } from "./Logo";
 import { useMe } from "@/lib/auth";
 import { LoadingState } from "./EmptyState";
 import { notificationsQuery } from "@/lib/queries";
+import { recordActivity } from "@/lib/points";
 
 export function AppShell({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
@@ -16,6 +17,19 @@ export function AppShell({ children }: { children: ReactNode }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const notifs = useQuery({ ...notificationsQuery(me.data?.id ?? ""), enabled: !!me.data });
   const unread = notifs.data?.filter((n) => !n.read).length ?? 0;
+  const qc = useQueryClient();
+  const loggedIn = useRef(false);
+
+  useEffect(() => {
+    if (!me.data || loggedIn.current) return;
+    loggedIn.current = true;
+    void recordActivity("daily_login").then((pts) => {
+      if (pts > 0) {
+        qc.invalidateQueries({ queryKey: ["wallet", me.data!.id] });
+        qc.invalidateQueries({ queryKey: ["missions", me.data!.id] });
+      }
+    });
+  }, [me.data, qc]);
 
   if (me.isLoading) return <LoadingState label="アカウントを準備しています…" />;
   if (me.isError || !me.data)

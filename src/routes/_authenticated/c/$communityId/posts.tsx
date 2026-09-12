@@ -16,6 +16,7 @@ import { EmptyState, ErrorState, LoadingState } from "@/components/app/EmptyStat
 import { timeAgo } from "@/lib/format";
 import { uploadFile, useSignedUrl } from "@/lib/storage";
 import { PageHeader } from "@/components/app/PageHeader";
+import { recordActivity } from "@/lib/points";
 
 export const Route = createFileRoute("/_authenticated/c/$communityId/posts")({
   head: () => ({
@@ -68,6 +69,7 @@ function PostsPage() {
         image_url,
       });
       if (error) throw error;
+      await recordActivity("post");
     },
     onSuccess: () => {
       toast.success("投稿しました");
@@ -226,6 +228,7 @@ function Comments({ postId, canComment }: { postId: string; canComment: boolean 
     mutationFn: async () => {
       const { error } = await supabase.from("post_comments").insert({ post_id: postId, user_id: me.data!.id, content: text.trim() });
       if (error) throw error;
+      await recordActivity("comment");
     },
     onSuccess: () => {
       setText("");
