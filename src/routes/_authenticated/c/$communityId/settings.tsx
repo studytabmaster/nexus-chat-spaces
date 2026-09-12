@@ -171,7 +171,7 @@ function Dashboard({ communityId }: { communityId: string }) {
           icon={Users}
           label="メンバー数"
           value={d.memberCount}
-          sub={`オーナー・管理者 ${(d.roleCounts.owner ?? 0) + (d.roleCounts.admin ?? 0)}人 / モデレーター ${d.roleCounts.moderator ?? 0}人`}
+          sub={`オーナー・管理者 ${(d.roleCounts["owner"] ?? 0) + (d.roleCounts["admin"] ?? 0)}人 / モデレーター ${d.roleCounts["moderator"] ?? 0}人`}
         />
         <StatCard icon={Wifi} label="オンライン" value={d.onlineCount} sub="オンライン表示を許可している人のみ" />
         <StatCard icon={Flag} label="未対応の通報" value={d.openReports} sub="「通報」タブで対応できます" accent />
