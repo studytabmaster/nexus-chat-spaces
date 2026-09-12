@@ -83,6 +83,9 @@ function CommunitySettingsPage() {
             <TabsTrigger value="bans">BANユーザー</TabsTrigger>
             <TabsTrigger value="audit">監査ログ</TabsTrigger>
           </TabsList>
+          <TabsContent value="dashboard">
+            <Dashboard communityId={communityId} />
+          </TabsContent>
           <TabsContent value="general">
             <GeneralSettings communityId={communityId} myRole={role} />
           </TabsContent>
