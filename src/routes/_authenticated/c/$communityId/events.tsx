@@ -102,6 +102,7 @@ export function EventCard({
         .from("event_rsvps")
         .insert({ event_id: event.id, user_id: me.data.id, status });
       if (error) throw error;
+      await recordActivity("event_rsvp", event.id);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["events", communityId] });

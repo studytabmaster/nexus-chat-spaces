@@ -41,6 +41,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { LoadingState, ErrorState } from "./EmptyState";
 import type { Profile } from "@/lib/queries";
+import { recordActivity } from "@/lib/points";
 
 type Reaction = Tables<"message_reactions">;
 export type ChatMessage = {
@@ -251,6 +252,7 @@ export function ChatView({
             })
           : await supabase.from("dm_messages").insert({ ...base, dm_id: source.dmId });
       if (error) throw error;
+      if (source.kind === "channel") await recordActivity("message");
 
       // メンション・返信通知
       const targets = new Set<string>();

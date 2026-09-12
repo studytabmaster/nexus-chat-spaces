@@ -1,12 +1,13 @@
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { Home, Compass, MessageCircle, Settings, Plus, Search, Bell, Bookmark, Users } from "lucide-react";
+import { Home, Compass, MessageCircle, Settings, Plus, Search, Bell, Bookmark, Users, Coins, ShoppingBag, ShieldAlert } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { UserAvatar } from "./UserAvatar";
 import { CommunityIcon } from "./CommunityIcon";
 import { CreateCommunityDialog } from "./CreateCommunityDialog";
 import type { Profile } from "@/lib/auth";
 import { myCommunitiesQuery } from "@/lib/queries";
+import { isAdminQuery } from "@/lib/shop";
 import { cn } from "@/lib/utils";
 import { Logo } from "./Logo";
 
@@ -17,10 +18,13 @@ const items = [
   { to: "/search", icon: Search, label: "検索" },
   { to: "/saved", icon: Bookmark, label: "保存済み" },
   { to: "/friends", icon: Users, label: "フレンド" },
+  { to: "/points", icon: Coins, label: "ポイント" },
+  { to: "/shop", icon: ShoppingBag, label: "公式Shop" },
 ] as const;
 
 export function NavRail({ me, unread, onNavigate }: { me: Profile; unread: number; onNavigate?: () => void }) {
   const mine = useQuery(myCommunitiesQuery(me.id));
+  const admin = useQuery(isAdminQuery(me.id));
 
   return (
     <TooltipProvider delayDuration={0}>
@@ -74,6 +78,11 @@ export function NavRail({ me, unread, onNavigate }: { me: Profile; unread: numbe
         />
 
         <div className="flex-1" />
+        {admin.data && (
+          <RailLink to="/admin" label="運営センター" onClick={onNavigate}>
+            <ShieldAlert className="size-5" />
+          </RailLink>
+        )}
         <RailLink to="/settings" label="Settings" onClick={onNavigate}>
           <Settings className="size-5" />
         </RailLink>

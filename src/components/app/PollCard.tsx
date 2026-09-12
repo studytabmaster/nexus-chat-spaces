@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { recordActivity } from "@/lib/points";
 
 export function PollCard({ poll, onChanged }: { poll: Poll; onChanged?: () => void }) {
   const me = useMe();
@@ -48,6 +49,7 @@ export function PollCard({ poll, onChanged }: { poll: Poll; onChanged?: () => vo
       const { error } = await supabase
         .from("poll_votes")
         .insert({ poll_id: poll.id, option_id: optionId, user_id: me.data.id });
+      if (!error) await recordActivity("poll_vote", poll.id);
       if (error) throw error;
     },
     onSuccess: invalidate,
