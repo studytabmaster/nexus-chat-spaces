@@ -17,9 +17,11 @@ import { Route as AuthenticatedDmRouteImport } from './routes/_authenticated/dm'
 import { Route as AuthenticatedFriendsRouteImport } from './routes/_authenticated/friends'
 import { Route as AuthenticatedHomeRouteImport } from './routes/_authenticated/home'
 import { Route as AuthenticatedNotificationsRouteImport } from './routes/_authenticated/notifications'
+import { Route as AuthenticatedPointsRouteImport } from './routes/_authenticated/points'
 import { Route as AuthenticatedSavedRouteImport } from './routes/_authenticated/saved'
 import { Route as AuthenticatedSearchRouteImport } from './routes/_authenticated/search'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
+import { Route as AuthenticatedShopRouteImport } from './routes/_authenticated/shop'
 import { Route as AuthenticatedCCommunityIdRouteRouteImport } from './routes/_authenticated/c/$communityId/route'
 import { Route as AuthenticatedDmDmIdRouteImport } from './routes/_authenticated/dm/$dmId'
 import { Route as AuthenticatedInviteCodeRouteImport } from './routes/_authenticated/invite.$code'
@@ -73,6 +75,11 @@ const AuthenticatedNotificationsRoute =
     path: '/notifications',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedPointsRoute = AuthenticatedPointsRouteImport.update({
+  id: '/points',
+  path: '/points',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedSavedRoute = AuthenticatedSavedRouteImport.update({
   id: '/saved',
   path: '/saved',
@@ -86,6 +93,11 @@ const AuthenticatedSearchRoute = AuthenticatedSearchRouteImport.update({
 const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedShopRoute = AuthenticatedShopRouteImport.update({
+  id: '/shop',
+  path: '/shop',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedCCommunityIdRouteRoute =
@@ -166,9 +178,11 @@ export interface FileRoutesByFullPath {
   '/friends': typeof AuthenticatedFriendsRoute
   '/home': typeof AuthenticatedHomeRoute
   '/notifications': typeof AuthenticatedNotificationsRoute
+  '/points': typeof AuthenticatedPointsRoute
   '/saved': typeof AuthenticatedSavedRoute
   '/search': typeof AuthenticatedSearchRoute
   '/settings': typeof AuthenticatedSettingsRoute
+  '/shop': typeof AuthenticatedShopRoute
   '/c/$communityId': typeof AuthenticatedCCommunityIdRouteRouteWithChildren
   '/dm/$dmId': typeof AuthenticatedDmDmIdRoute
   '/invite/$code': typeof AuthenticatedInviteCodeRoute
@@ -190,9 +204,11 @@ export interface FileRoutesByTo {
   '/friends': typeof AuthenticatedFriendsRoute
   '/home': typeof AuthenticatedHomeRoute
   '/notifications': typeof AuthenticatedNotificationsRoute
+  '/points': typeof AuthenticatedPointsRoute
   '/saved': typeof AuthenticatedSavedRoute
   '/search': typeof AuthenticatedSearchRoute
   '/settings': typeof AuthenticatedSettingsRoute
+  '/shop': typeof AuthenticatedShopRoute
   '/dm/$dmId': typeof AuthenticatedDmDmIdRoute
   '/invite/$code': typeof AuthenticatedInviteCodeRoute
   '/u/$userId': typeof AuthenticatedUUserIdRoute
@@ -215,9 +231,11 @@ export interface FileRoutesById {
   '/_authenticated/friends': typeof AuthenticatedFriendsRoute
   '/_authenticated/home': typeof AuthenticatedHomeRoute
   '/_authenticated/notifications': typeof AuthenticatedNotificationsRoute
+  '/_authenticated/points': typeof AuthenticatedPointsRoute
   '/_authenticated/saved': typeof AuthenticatedSavedRoute
   '/_authenticated/search': typeof AuthenticatedSearchRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
+  '/_authenticated/shop': typeof AuthenticatedShopRoute
   '/_authenticated/c/$communityId': typeof AuthenticatedCCommunityIdRouteRouteWithChildren
   '/_authenticated/dm/$dmId': typeof AuthenticatedDmDmIdRoute
   '/_authenticated/invite/$code': typeof AuthenticatedInviteCodeRoute
@@ -241,9 +259,11 @@ export interface FileRouteTypes {
     | '/friends'
     | '/home'
     | '/notifications'
+    | '/points'
     | '/saved'
     | '/search'
     | '/settings'
+    | '/shop'
     | '/c/$communityId'
     | '/dm/$dmId'
     | '/invite/$code'
@@ -265,9 +285,11 @@ export interface FileRouteTypes {
     | '/friends'
     | '/home'
     | '/notifications'
+    | '/points'
     | '/saved'
     | '/search'
     | '/settings'
+    | '/shop'
     | '/dm/$dmId'
     | '/invite/$code'
     | '/u/$userId'
@@ -289,9 +311,11 @@ export interface FileRouteTypes {
     | '/_authenticated/friends'
     | '/_authenticated/home'
     | '/_authenticated/notifications'
+    | '/_authenticated/points'
     | '/_authenticated/saved'
     | '/_authenticated/search'
     | '/_authenticated/settings'
+    | '/_authenticated/shop'
     | '/_authenticated/c/$communityId'
     | '/_authenticated/dm/$dmId'
     | '/_authenticated/invite/$code'
@@ -370,6 +394,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedNotificationsRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/points': {
+      id: '/_authenticated/points'
+      path: '/points'
+      fullPath: '/points'
+      preLoaderRoute: typeof AuthenticatedPointsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/saved': {
       id: '/_authenticated/saved'
       path: '/saved'
@@ -389,6 +420,13 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof AuthenticatedSettingsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/shop': {
+      id: '/_authenticated/shop'
+      path: '/shop'
+      fullPath: '/shop'
+      preLoaderRoute: typeof AuthenticatedShopRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/c/$communityId': {
@@ -527,9 +565,11 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedFriendsRoute: typeof AuthenticatedFriendsRoute
   AuthenticatedHomeRoute: typeof AuthenticatedHomeRoute
   AuthenticatedNotificationsRoute: typeof AuthenticatedNotificationsRoute
+  AuthenticatedPointsRoute: typeof AuthenticatedPointsRoute
   AuthenticatedSavedRoute: typeof AuthenticatedSavedRoute
   AuthenticatedSearchRoute: typeof AuthenticatedSearchRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
+  AuthenticatedShopRoute: typeof AuthenticatedShopRoute
   AuthenticatedCCommunityIdRouteRoute: typeof AuthenticatedCCommunityIdRouteRouteWithChildren
   AuthenticatedInviteCodeRoute: typeof AuthenticatedInviteCodeRoute
   AuthenticatedUUserIdRoute: typeof AuthenticatedUUserIdRoute
@@ -541,9 +581,11 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedFriendsRoute: AuthenticatedFriendsRoute,
   AuthenticatedHomeRoute: AuthenticatedHomeRoute,
   AuthenticatedNotificationsRoute: AuthenticatedNotificationsRoute,
+  AuthenticatedPointsRoute: AuthenticatedPointsRoute,
   AuthenticatedSavedRoute: AuthenticatedSavedRoute,
   AuthenticatedSearchRoute: AuthenticatedSearchRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
+  AuthenticatedShopRoute: AuthenticatedShopRoute,
   AuthenticatedCCommunityIdRouteRoute:
     AuthenticatedCCommunityIdRouteRouteWithChildren,
   AuthenticatedInviteCodeRoute: AuthenticatedInviteCodeRoute,
