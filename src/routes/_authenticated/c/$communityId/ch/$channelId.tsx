@@ -46,7 +46,9 @@ function ChannelPage() {
   const subtitle = [channel.topic || null, categoryName || null].filter(Boolean).join(" · ") || undefined;
 
   if (channel.type === "voice") {
-    return <VoiceChannelView name={channel.name} topic={channel.topic} isMember={!!role} />;
+    return (
+      <VoiceChannelView channelId={channelId} name={channel.name} topic={channel.topic} isMember={!!role} />
+    );
   }
 
   return (
