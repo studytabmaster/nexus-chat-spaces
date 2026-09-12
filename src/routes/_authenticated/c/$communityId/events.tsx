@@ -17,6 +17,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { chatTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { recordActivity } from "@/lib/points";
 
 export const Route = createFileRoute("/_authenticated/c/$communityId/events")({
   head: () => ({
