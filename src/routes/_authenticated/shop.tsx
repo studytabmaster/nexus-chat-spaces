@@ -15,8 +15,10 @@ import {
   shopKindLabel,
   SHOP_KINDS,
   isAdminQuery,
+  displayableImage,
   type ShopItem,
 } from "@/lib/shop";
+import { useSignedUrl } from "@/lib/storage";
 import { PageHeader } from "@/components/app/PageHeader";
 import { EmptyState, LoadingState } from "@/components/app/EmptyState";
 import { Button } from "@/components/ui/button";
