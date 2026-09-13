@@ -1,4 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
+import { generateShopItemDraft, type AiShopDraft } from "@/lib/shop-ai.functions";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -116,6 +118,50 @@ function toLocalInput(iso: string | null) {
   const d = new Date(iso);
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function AiDraftPanel({ kind, onApply }: { kind: string; onApply: (d: AiShopDraft) => void }) {
+  const [prompt, setPrompt] = useState("");
+  const [withImage, setWithImage] = useState(true);
+  const gen = useServerFn(generateShopItemDraft);
+  const run = useMutation({
+    mutationFn: async () => {
+      if (prompt.trim().length < 2) throw new Error("どんな商品にしたいか入力してください");
+      return gen({ data: { prompt: prompt.trim(), kind, withImage } });
+    },
+    onSuccess: (d) => {
+      onApply(d);
+      toast.success(d.imagePath ? "AIが商品案と画像を作成しました" : "AIが商品案を作成しました");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  return (
+    <div className="space-y-2 rounded-xl border border-dashed p-3">
+      <p className="flex items-center gap-1.5 text-sm font-medium">
+        <Sparkles className="size-4 text-primary" />
+        AIに商品案を作ってもらう
+      </p>
+      <Textarea
+        rows={2}
+        placeholder="例：夏祭りの花火をイメージした華やかなプロフィールフレーム"
+        value={prompt}
+        onChange={(e) => setPrompt(e.target.value)}
+      />
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <label className="flex items-center gap-2 text-xs text-muted-foreground">
+          <Switch checked={withImage} onCheckedChange={setWithImage} />
+          商品画像も作る
+        </label>
+        <Button size="sm" variant="outline" onClick={() => run.mutate()} disabled={run.isPending}>
+          {run.isPending ? "作成中…" : "AIで作成"}
+        </Button>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        AIが作った商品は「審査中」の下書きとして入り、承認するまで公開されません。
+      </p>
+    </div>
+  );
 }
 
 function ItemsManager() {
