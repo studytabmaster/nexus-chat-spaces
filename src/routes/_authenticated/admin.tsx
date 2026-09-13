@@ -299,6 +299,23 @@ function ItemsManager() {
             <DialogTitle>{editing ? "商品を編集" : "商品を作成"}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
+            <AiDraftPanel
+              kind={form.kind}
+              onApply={(d) =>
+                setForm((f) => ({
+                  ...f,
+                  name: d.name,
+                  description: d.description,
+                  payload: d.payload,
+                  price: String(d.price),
+                  season: d.season,
+                  image_url: d.imagePath ?? f.image_url,
+                  ai_generated: true,
+                  published: false,
+                  review_status: "pending",
+                }))
+              }
+            />
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
                 <Label>種類</Label>
