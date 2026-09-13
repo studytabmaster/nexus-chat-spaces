@@ -28,6 +28,14 @@ export function shopKindLabel(kind: string) {
   return SHOP_KINDS.find((k) => k.value === kind)?.label ?? kind;
 }
 
+/** 表示できる画像だけを返す（端末内のfile://パスなどは表示できないので無視する）。 */
+export function displayableImage(url: string | null | undefined) {
+  if (!url) return null;
+  if (/^https?:\/\//.test(url)) return url;
+  if (url.includes("://")) return null; // file:// や blob: などは表示できない
+  return url; // ストレージ内のパス
+}
+
 export const REVIEW_STATUS_LABEL: Record<string, string> = {
   draft: "下書き",
   pending: "審査中",

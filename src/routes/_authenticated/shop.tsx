@@ -15,8 +15,10 @@ import {
   shopKindLabel,
   SHOP_KINDS,
   isAdminQuery,
+  displayableImage,
   type ShopItem,
 } from "@/lib/shop";
+import { useSignedUrl } from "@/lib/storage";
 import { PageHeader } from "@/components/app/PageHeader";
 import { EmptyState, LoadingState } from "@/components/app/EmptyState";
 import { Button } from "@/components/ui/button";
@@ -193,6 +195,8 @@ function ItemCard({
   const s = saleState(item);
   const remaining = item.stock != null ? Math.max(item.stock - item.sold, 0) : null;
   const canBuy = s.state === "onsale" && !owned && balance >= item.price;
+  const { data: imageUrl } = useSignedUrl(displayableImage(item.image_url));
+  const isColor = item.payload.startsWith("#") || item.payload.startsWith("linear-gradient");
 
   return (
     <div className="flex flex-col rounded-2xl border bg-card p-4">
@@ -200,22 +204,20 @@ function ItemCard({
         <Badge variant="secondary">{shopKindLabel(item.kind)}</Badge>
         <Badge variant={s.state === "onsale" ? "default" : "outline"}>{s.label}</Badge>
       </div>
-      {item.image_url ? (
+      {imageUrl ? (
         <img
-          src={item.image_url}
+          src={imageUrl}
           alt={item.name}
           loading="lazy"
-          className="mt-3 aspect-video w-full rounded-xl object-cover"
+          className="mt-3 aspect-video w-full rounded-xl border object-cover"
         />
       ) : (
         <div
-          className="mt-3 aspect-video w-full rounded-xl border"
-          style={
-            item.payload.startsWith("#") || item.payload.startsWith("linear-gradient")
-              ? { background: item.payload }
-              : undefined
-          }
-        />
+          className="mt-3 flex aspect-video w-full items-center justify-center rounded-xl border text-2xl"
+          style={isColor ? { background: item.payload } : undefined}
+        >
+          {!isColor && <span>{item.payload || "🎁"}</span>}
+        </div>
       )}
       <p className="mt-3 font-semibold">{item.name}</p>
       <p className="mt-1 text-xs text-muted-foreground">{item.description}</p>

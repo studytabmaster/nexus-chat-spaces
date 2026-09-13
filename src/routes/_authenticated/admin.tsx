@@ -1,4 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
+import { generateShopItemDraft, type AiShopDraft } from "@/lib/shop-ai.functions";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -118,6 +120,50 @@ function toLocalInput(iso: string | null) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+function AiDraftPanel({ kind, onApply }: { kind: string; onApply: (d: AiShopDraft) => void }) {
+  const [prompt, setPrompt] = useState("");
+  const [withImage, setWithImage] = useState(true);
+  const gen = useServerFn(generateShopItemDraft);
+  const run = useMutation({
+    mutationFn: async () => {
+      if (prompt.trim().length < 2) throw new Error("どんな商品にしたいか入力してください");
+      return gen({ data: { prompt: prompt.trim(), kind, withImage } });
+    },
+    onSuccess: (d) => {
+      onApply(d);
+      toast.success(d.imagePath ? "AIが商品案と画像を作成しました" : "AIが商品案を作成しました");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  return (
+    <div className="space-y-2 rounded-xl border border-dashed p-3">
+      <p className="flex items-center gap-1.5 text-sm font-medium">
+        <Sparkles className="size-4 text-primary" />
+        AIに商品案を作ってもらう
+      </p>
+      <Textarea
+        rows={2}
+        placeholder="例：夏祭りの花火をイメージした華やかなプロフィールフレーム"
+        value={prompt}
+        onChange={(e) => setPrompt(e.target.value)}
+      />
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <label className="flex items-center gap-2 text-xs text-muted-foreground">
+          <Switch checked={withImage} onCheckedChange={setWithImage} />
+          商品画像も作る
+        </label>
+        <Button size="sm" variant="outline" onClick={() => run.mutate()} disabled={run.isPending}>
+          {run.isPending ? "作成中…" : "AIで作成"}
+        </Button>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        AIが作った商品は「審査中」の下書きとして入り、承認するまで公開されません。
+      </p>
+    </div>
+  );
+}
+
 function ItemsManager() {
   const qc = useQueryClient();
   const me = useMe();
@@ -156,6 +202,9 @@ function ItemsManager() {
       if (!form.name.trim()) throw new Error("商品名を入力してください");
       const price = Number(form.price);
       if (!Number.isFinite(price) || price < 0) throw new Error("価格が正しくありません");
+      const img = form.image_url.trim();
+      if (img && img.includes("://") && !/^https?:\/\//.test(img))
+        throw new Error("画像は https のURL、またはAIで作成した画像のみ使えます（端末内のファイルは表示できません）");
       // AI生成の商品は自動公開しない（必ず審査を通す）
       const published = form.ai_generated && form.review_status !== "approved" ? false : form.published;
       const payload = {
@@ -299,6 +348,23 @@ function ItemsManager() {
             <DialogTitle>{editing ? "商品を編集" : "商品を作成"}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
+            <AiDraftPanel
+              kind={form.kind}
+              onApply={(d) =>
+                setForm((f) => ({
+                  ...f,
+                  name: d.name,
+                  description: d.description,
+                  payload: d.payload,
+                  price: String(d.price),
+                  season: d.season,
+                  image_url: d.imagePath ?? f.image_url,
+                  ai_generated: true,
+                  published: false,
+                  review_status: "pending",
+                }))
+              }
+            />
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
                 <Label>種類</Label>

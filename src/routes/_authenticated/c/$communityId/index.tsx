@@ -32,11 +32,11 @@ function CommunityOverview() {
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="relative h-36 bg-brand-gradient md:h-48">
-        {banner && <img src={banner} alt="" className="size-full object-cover" />}
+      <div className="relative h-28 shrink-0 overflow-hidden bg-brand-gradient sm:h-36 md:h-44">
+        {banner && <img src={banner} alt="" className="absolute inset-0 size-full object-cover" />}
       </div>
-      <div className="mx-auto max-w-3xl px-4 pb-10 md:px-8">
-        <div className="-mt-10 flex flex-wrap items-end gap-4">
+      <div className="relative z-10 mx-auto max-w-3xl px-4 pb-10 md:px-8">
+        <div className="-mt-8 flex flex-wrap items-end gap-3 sm:gap-4">
           <CommunityIcon id={c.data.id} name={c.data.name} iconUrl={c.data.icon_url} className="size-20 rounded-3xl border-4 border-background text-2xl" />
           <div className="min-w-0 flex-1 pb-1">
             <h1 className="flex items-center gap-2 text-2xl font-extrabold">
