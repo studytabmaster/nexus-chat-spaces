@@ -202,6 +202,9 @@ function ItemsManager() {
       if (!form.name.trim()) throw new Error("商品名を入力してください");
       const price = Number(form.price);
       if (!Number.isFinite(price) || price < 0) throw new Error("価格が正しくありません");
+      const img = form.image_url.trim();
+      if (img && img.includes("://") && !/^https?:\/\//.test(img))
+        throw new Error("画像は https のURL、またはAIで作成した画像のみ使えます（端末内のファイルは表示できません）");
       // AI生成の商品は自動公開しない（必ず審査を通す）
       const published = form.ai_generated && form.review_status !== "approved" ? false : form.published;
       const payload = {
