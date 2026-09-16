@@ -462,7 +462,12 @@ export function ChatView({
               <div className="w-10 shrink-0">
                 {!grouped && m.author && (
                   <Link to="/u/$userId" params={{ userId: m.user_id }}>
-                    <UserAvatar name={m.author.display_name} avatarUrl={m.author.avatar_url} size="md" />
+                    <UserAvatar
+                      name={m.author.display_name}
+                      avatarUrl={m.author.avatar_url}
+                      size="md"
+                      frame={cosmetics[m.user_id]?.frame}
+                    />
                   </Link>
                 )}
               </div>
