@@ -125,6 +125,14 @@ export function ChatView({
     },
   });
 
+  // 装備アイテム（称号・フレーム）とカスタムロールを名前の横に表示する
+  const cosmetics = useCosmetics((messages.data ?? []).map((m) => m.user_id));
+  const memberRoles = useQuery({
+    ...memberRolesQuery(source.kind === "channel" ? source.communityId : ""),
+    enabled: source.kind === "channel",
+  });
+  const rolesByUser = groupMemberRoles(memberRoles.data);
+
   // スレッド返信数・最終返信
   const threadStats = useQuery({
     queryKey: ["thread-stats", filterVal],
