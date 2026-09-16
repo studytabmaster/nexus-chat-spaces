@@ -341,6 +341,52 @@ export type Database = {
           },
         ]
       }
+      community_member_roles: {
+        Row: {
+          community_id: string
+          created_at: string
+          id: string
+          role_id: string
+          user_id: string
+        }
+        Insert: {
+          community_id: string
+          created_at?: string
+          id?: string
+          role_id: string
+          user_id: string
+        }
+        Update: {
+          community_id?: string
+          created_at?: string
+          id?: string
+          role_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_member_roles_community_id_fkey"
+            columns: ["community_id"]
+            isOneToOne: false
+            referencedRelation: "communities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "community_member_roles_role_id_fkey"
+            columns: ["role_id"]
+            isOneToOne: false
+            referencedRelation: "community_roles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "community_member_roles_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       community_members: {
         Row: {
           community_id: string
@@ -379,6 +425,50 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      community_roles: {
+        Row: {
+          color: string
+          community_id: string
+          created_at: string
+          icon: string
+          id: string
+          name: string
+          permissions: string[]
+          position: number
+          updated_at: string
+        }
+        Insert: {
+          color?: string
+          community_id: string
+          created_at?: string
+          icon?: string
+          id?: string
+          name: string
+          permissions?: string[]
+          position?: number
+          updated_at?: string
+        }
+        Update: {
+          color?: string
+          community_id?: string
+          created_at?: string
+          icon?: string
+          id?: string
+          name?: string
+          permissions?: string[]
+          position?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_roles_community_id_fkey"
+            columns: ["community_id"]
+            isOneToOne: false
+            referencedRelation: "communities"
             referencedColumns: ["id"]
           },
         ]
@@ -2147,6 +2237,16 @@ export type Database = {
       transfer_ownership: {
         Args: { _community_id: string; _new_owner: string }
         Returns: undefined
+      }
+      user_cosmetics: {
+        Args: { _user_ids: string[] }
+        Returns: {
+          background: string
+          frame: string
+          frame_image: string
+          title: string
+          user_id: string
+        }[]
       }
     }
     Enums: {
