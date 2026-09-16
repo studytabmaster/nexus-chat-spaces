@@ -479,10 +479,11 @@ export function ChatView({
                   </p>
                 )}
                 {!grouped && (
-                  <div className="flex items-baseline gap-2">
+                  <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
                     <Link to="/u/$userId" params={{ userId: m.user_id }} className="text-sm font-bold hover:underline">
                       {m.author?.display_name ?? "Unknown"}
                     </Link>
+                    <NameDecorations title={cosmetics[m.user_id]?.title} roles={rolesByUser[m.user_id]} />
                     <span className="text-[11px] text-muted-foreground">{chatTime(m.created_at)}</span>
                   </div>
                 )}
