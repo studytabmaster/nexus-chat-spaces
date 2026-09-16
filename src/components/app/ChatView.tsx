@@ -42,6 +42,9 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { LoadingState, ErrorState } from "./EmptyState";
 import type { Profile } from "@/lib/queries";
 import { recordActivity } from "@/lib/points";
+import { useCosmetics } from "@/lib/cosmetics";
+import { groupMemberRoles, memberRolesQuery } from "@/lib/roles";
+import { NameDecorations } from "./NameDecorations";
 
 type Reaction = Tables<"message_reactions">;
 export type ChatMessage = {
@@ -121,6 +124,14 @@ export function ChatView({
       return data as unknown as ChatMessage[];
     },
   });
+
+  // 装備アイテム（称号・フレーム）とカスタムロールを名前の横に表示する
+  const cosmetics = useCosmetics((messages.data ?? []).map((m) => m.user_id));
+  const memberRoles = useQuery({
+    ...memberRolesQuery(source.kind === "channel" ? source.communityId : ""),
+    enabled: source.kind === "channel",
+  });
+  const rolesByUser = groupMemberRoles(memberRoles.data);
 
   // スレッド返信数・最終返信
   const threadStats = useQuery({
@@ -451,7 +462,12 @@ export function ChatView({
               <div className="w-10 shrink-0">
                 {!grouped && m.author && (
                   <Link to="/u/$userId" params={{ userId: m.user_id }}>
-                    <UserAvatar name={m.author.display_name} avatarUrl={m.author.avatar_url} size="md" />
+                    <UserAvatar
+                      name={m.author.display_name}
+                      avatarUrl={m.author.avatar_url}
+                      size="md"
+                      frame={cosmetics[m.user_id]?.frame}
+                    />
                   </Link>
                 )}
               </div>
@@ -463,10 +479,11 @@ export function ChatView({
                   </p>
                 )}
                 {!grouped && (
-                  <div className="flex items-baseline gap-2">
+                  <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
                     <Link to="/u/$userId" params={{ userId: m.user_id }} className="text-sm font-bold hover:underline">
                       {m.author?.display_name ?? "Unknown"}
                     </Link>
+                    <NameDecorations title={cosmetics[m.user_id]?.title} roles={rolesByUser[m.user_id]} />
                     <span className="text-[11px] text-muted-foreground">{chatTime(m.created_at)}</span>
                   </div>
                 )}

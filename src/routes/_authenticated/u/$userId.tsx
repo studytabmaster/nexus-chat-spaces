@@ -111,17 +111,22 @@ function ProfilePage() {
           }
         />
 
-        <div className="rounded-2xl border bg-card p-6">
-          <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-start">
+        <div className="overflow-hidden rounded-2xl border bg-card">
+          {cosmeticBg && <div className="h-24 w-full" style={cosmeticBg} />}
+          <div className={cn("flex flex-col items-center gap-4 p-6 sm:flex-row sm:items-start", cosmeticBg && "-mt-10")}>
             <UserAvatar
               name={profile.data.display_name}
               avatarUrl={profile.data.avatar_url}
               showStatus={profile.data.show_online}
               status={profile.data.status}
               size="xl"
+              frame={cosmetic?.frame}
             />
             <div className="flex-1 text-center sm:text-left">
-              <h1 className="text-2xl font-extrabold">{profile.data.display_name}</h1>
+              <h1 className="flex flex-wrap items-center justify-center gap-2 text-2xl font-extrabold sm:justify-start">
+                {profile.data.display_name}
+                <NameDecorations title={cosmetic?.title} />
+              </h1>
               <p className="flex items-center justify-center gap-2 text-muted-foreground sm:justify-start">
                 <AtSign className="size-3.5" /> {profile.data.username}
               </p>
