@@ -42,6 +42,9 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { LoadingState, ErrorState } from "./EmptyState";
 import type { Profile } from "@/lib/queries";
 import { recordActivity } from "@/lib/points";
+import { useCosmetics } from "@/lib/cosmetics";
+import { groupMemberRoles, memberRolesQuery } from "@/lib/roles";
+import { NameDecorations } from "./NameDecorations";
 
 type Reaction = Tables<"message_reactions">;
 export type ChatMessage = {
