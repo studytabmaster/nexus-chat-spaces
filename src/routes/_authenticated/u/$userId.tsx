@@ -17,6 +17,9 @@ import { useFriends } from "@/lib/social";
 import { userBadgesQuery } from "@/lib/community-extras";
 import { Badge as UiBadge } from "@/components/ui/badge";
 import { STATUS_LABEL } from "@/lib/constants";
+import { cn } from "@/lib/utils";
+import { useCosmetics, backgroundStyle } from "@/lib/cosmetics";
+import { NameDecorations } from "@/components/app/NameDecorations";
 
 export const Route = createFileRoute("/_authenticated/u/$userId")({
   head: () => ({
@@ -37,6 +40,9 @@ function ProfilePage() {
   const qc = useQueryClient();
   const profile = useQuery(profileQuery(userId));
   const myCommunities = useQuery(myCommunitiesQuery(me.data?.id ?? ""));
+  const cosmetics = useCosmetics([userId]);
+  const cosmetic = cosmetics[userId];
+  const cosmeticBg = backgroundStyle(cosmetic?.background);
 
   const startDm = useMutation({
     mutationFn: async () => {

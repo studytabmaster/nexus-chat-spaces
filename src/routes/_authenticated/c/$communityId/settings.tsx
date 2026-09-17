@@ -26,6 +26,7 @@ import { uploadFile } from "@/lib/storage";
 import { useMe } from "@/lib/auth";
 import { shortDate } from "@/lib/format";
 import { MemberManagePanel } from "@/components/app/MemberManagePanel";
+import { RoleManager } from "@/components/app/RoleManager";
 import { dashboardQuery, useDashboardRealtime } from "@/lib/dashboard";
 import { chatTime } from "@/lib/format";
 import { Users, Wifi, UserPlus2 } from "lucide-react";
@@ -79,6 +80,7 @@ function CommunitySettingsPage() {
             <TabsTrigger value="channels">チャンネル</TabsTrigger>
             <TabsTrigger value="requests">参加申請</TabsTrigger>
             <TabsTrigger value="members">メンバー</TabsTrigger>
+            <TabsTrigger value="roles">ロール</TabsTrigger>
             <TabsTrigger value="welcome">ウェルカム</TabsTrigger>
             <TabsTrigger value="invites">招待リンク</TabsTrigger>
             <TabsTrigger value="emojis">絵文字</TabsTrigger>
@@ -100,6 +102,9 @@ function CommunitySettingsPage() {
           </TabsContent>
           <TabsContent value="members">
             <MemberManager communityId={communityId} myRole={role as "owner" | "admin"} />
+          </TabsContent>
+          <TabsContent value="roles">
+            <RoleManager communityId={communityId} />
           </TabsContent>
           <TabsContent value="welcome">
             <WelcomeSettings communityId={communityId} />
