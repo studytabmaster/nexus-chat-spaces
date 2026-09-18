@@ -23,6 +23,7 @@ export function dashboardQuery(communityId: string) {
   return queryOptions({
     queryKey: ["dashboard", communityId],
     enabled: !!communityId,
+    staleTime: 60_000,
     queryFn: async (): Promise<DashboardStats> => {
       const [members, reports] = await Promise.all([
         supabase
@@ -81,7 +82,16 @@ export function useDashboardRealtime(communityId: string) {
   const qc = useQueryClient();
   useEffect(() => {
     if (!communityId) return;
-    const invalidate = () => qc.invalidateQueries({ queryKey: ["dashboard", communityId] });
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    // 参加・通報の変化だけを購読し、まとめて再集計する（オンライン数は定期更新）
+    const invalidate = () => {
+      if (timer) return;
+      timer = setTimeout(() => {
+        timer = null;
+        if (document.visibilityState !== "visible") return;
+        qc.invalidateQueries({ queryKey: ["dashboard", communityId] });
+      }, 3000);
+    };
     const channel = supabase
       .channel(`dashboard:${communityId}`)
       .on(
@@ -94,9 +104,13 @@ export function useDashboardRealtime(communityId: string) {
         { event: "*", schema: "public", table: "reports", filter: `community_id=eq.${communityId}` },
         invalidate,
       )
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "profiles" }, invalidate)
       .subscribe();
+    const poll = setInterval(() => {
+      if (document.visibilityState === "visible") qc.invalidateQueries({ queryKey: ["dashboard", communityId] });
+    }, 60_000);
     return () => {
+      if (timer) clearTimeout(timer);
+      clearInterval(poll);
       supabase.removeChannel(channel);
     };
   }, [communityId, qc]);
