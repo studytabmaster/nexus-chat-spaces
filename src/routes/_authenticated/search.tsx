@@ -32,13 +32,10 @@ function useProfileSearch(q: string) {
     queryKey: ["profile-search", q],
     enabled: q.length >= 1,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("*")
-        .or(`display_name.ilike.%${q}%,username.ilike.%${q}%`)
-        .limit(20);
+      // 公開してよい項目のみを返す検索を利用する
+      const { data, error } = await supabase.rpc("search_profiles", { _q: q, _limit: 20 });
       if (error) throw error;
-      return data as Profile[];
+      return (data ?? []) as unknown as Profile[];
     },
   });
 }

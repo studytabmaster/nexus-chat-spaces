@@ -95,9 +95,10 @@ export const profileQuery = (userId: string) =>
   queryOptions({
     queryKey: ["profile", userId],
     queryFn: async () => {
-      const { data, error } = await supabase.from("profiles").select("*").eq("id", userId).maybeSingle();
+      // 公開してよい項目のみを返す仕組みを経由して取得する
+      const { data, error } = await supabase.rpc("profile_card", { _id: userId });
       if (error) throw error;
-      return data;
+      return data?.[0] ?? null;
     },
   });
 

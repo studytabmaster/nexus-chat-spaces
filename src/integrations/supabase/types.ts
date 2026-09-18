@@ -2140,6 +2140,7 @@ export type Database = {
         Args: { _community_id: string; _user_id: string }
         Returns: boolean
       }
+      can_view_profile: { Args: { _id: string }; Returns: boolean }
       claim_mission: { Args: { _key: string }; Returns: number }
       community_role_of: {
         Args: { _community_id: string; _user_id: string }
@@ -2218,6 +2219,21 @@ export type Database = {
           username: string
         }[]
       }
+      profile_card: {
+        Args: { _id: string }
+        Returns: {
+          allow_dms: boolean
+          avatar_url: string
+          bio: string
+          created_at: string
+          custom_status: string
+          display_name: string
+          id: string
+          show_online: boolean
+          status: string
+          username: string
+        }[]
+      }
       purchase_shop_item: { Args: { _item_id: string }; Returns: string }
       record_activity: {
         Args: { _kind: string; _ref_id?: string }
@@ -2231,6 +2247,18 @@ export type Database = {
       revoke_points: {
         Args: { _points: number; _reason: string; _user_id: string }
         Returns: undefined
+      }
+      search_profiles: {
+        Args: { _limit?: number; _q: string }
+        Returns: {
+          avatar_url: string
+          bio: string
+          custom_status: string
+          display_name: string
+          id: string
+          status: string
+          username: string
+        }[]
       }
       start_dm: { Args: { _other: string }; Returns: string }
       sync_achievements: { Args: { _user_id: string }; Returns: undefined }
