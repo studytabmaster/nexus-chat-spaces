@@ -2276,6 +2276,17 @@ export type Database = {
           user_id: string
         }[]
       }
+      user_cosmetics_v2: {
+        Args: { _user_ids: string[] }
+        Returns: {
+          background: string
+          background_image: string
+          frame: string
+          frame_image: string
+          title: string
+          user_id: string
+        }[]
+      }
     }
     Enums: {
       app_role: "admin" | "moderator" | "user"
