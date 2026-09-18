@@ -165,24 +165,44 @@ export function ChatView({
     return m;
   }, [polls.data]);
 
-  // realtime
+  // realtime（連続イベントをまとめて再取得し、通信量を抑える）
   useEffect(() => {
-    const ch = supabase
-      .channel(`chat-${table}-${filterVal}-${threadRootId ?? "main"}`)
-      .on("postgres_changes", { event: "*", schema: "public", table, filter: `${filterCol}=eq.${filterVal}` }, () => {
+    let messageTimer: ReturnType<typeof setTimeout> | null = null;
+    let sideTimer: ReturnType<typeof setTimeout> | null = null;
+    const refetchMessages = () => {
+      if (messageTimer) return;
+      messageTimer = setTimeout(() => {
+        messageTimer = null;
+        if (document.visibilityState !== "visible") return;
         qc.invalidateQueries({ queryKey: ["chat", table, filterVal] });
         qc.invalidateQueries({ queryKey: ["thread-stats", filterVal] });
-      });
+      }, 800);
+    };
+    const refetchSide = () => {
+      if (sideTimer) return;
+      sideTimer = setTimeout(() => {
+        sideTimer = null;
+        if (document.visibilityState !== "visible") return;
+        qc.invalidateQueries({ queryKey: ["chat", table, filterVal] });
+        qc.invalidateQueries({ queryKey: ["polls"] });
+      }, 4000);
+    };
+
+    const ch = supabase
+      .channel(`chat-${table}-${filterVal}-${threadRootId ?? "main"}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table, filter: `${filterCol}=eq.${filterVal}` },
+        refetchMessages,
+      );
     if (source.kind === "channel") {
-      ch.on("postgres_changes", { event: "*", schema: "public", table: "message_reactions" }, () =>
-        qc.invalidateQueries({ queryKey: ["chat", table, filterVal] }),
-      );
-      ch.on("postgres_changes", { event: "*", schema: "public", table: "poll_votes" }, () =>
-        qc.invalidateQueries({ queryKey: ["polls"] }),
-      );
+      ch.on("postgres_changes", { event: "*", schema: "public", table: "message_reactions" }, refetchSide);
+      ch.on("postgres_changes", { event: "*", schema: "public", table: "poll_votes" }, refetchSide);
     }
     ch.subscribe();
     return () => {
+      if (messageTimer) clearTimeout(messageTimer);
+      if (sideTimer) clearTimeout(sideTimer);
       supabase.removeChannel(ch);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
