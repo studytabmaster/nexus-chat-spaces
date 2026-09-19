@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils";
 import { initials } from "@/lib/format";
 import { STATUS_COLOR } from "@/lib/constants";
 import { useSignedUrl } from "@/lib/storage";
-import { frameStyle } from "@/lib/cosmetics";
+import { frameStyle, safeImage } from "@/lib/cosmetics";
 
 type Props = {
   name: string;
@@ -14,6 +14,8 @@ type Props = {
   size?: "xs" | "sm" | "md" | "lg" | "xl";
   /** ショップで装備中のフレーム（色やグラデーション） */
   frame?: string | null | undefined;
+  /** ショップで装備中のフレーム画像 */
+  frameImage?: string | null | undefined;
 };
 
 const sizes = {
@@ -24,9 +26,19 @@ const sizes = {
   xl: "size-20 text-xl",
 };
 
-export function UserAvatar({ name, avatarUrl, status, showStatus, className, size = "md", frame }: Props) {
+export function UserAvatar({
+  name,
+  avatarUrl,
+  status,
+  showStatus,
+  className,
+  size = "md",
+  frame,
+  frameImage,
+}: Props) {
   const { data: url } = useSignedUrl(avatarUrl);
-  const style = frameStyle(frame);
+  const { data: frameUrl } = useSignedUrl(safeImage(frameImage));
+  const style = frameStyle(frame, frameUrl);
   return (
     <span className={cn("relative inline-block shrink-0", className)}>
       <span className="block" style={style}>
