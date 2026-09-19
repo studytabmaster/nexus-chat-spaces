@@ -487,6 +487,7 @@ export function ChatView({
                       avatarUrl={m.author.avatar_url}
                       size="md"
                       frame={cosmetics[m.user_id]?.frame}
+                      frameImage={cosmetics[m.user_id]?.frame_image}
                     />
                   </Link>
                 )}
