@@ -41,6 +41,7 @@ function SettingsPage() {
   const qc = useQueryClient();
   const profile = useQuery(profileQuery(me.data?.id ?? ""));
   const fileRef = useRef<HTMLInputElement>(null);
+  const cosmetic = useCosmetic(me.data?.id);
 
   const [form, setForm] = useState<{
     display_name: string;
