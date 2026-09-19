@@ -153,6 +153,36 @@ function SettingsPage() {
             </div>
           </div>
 
+          <div className="rounded-xl border p-4">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <p className="font-medium">装備中のアイテム</p>
+                <p className="text-sm text-muted-foreground">ショップで交換したアイテムがプロフィールに反映されます</p>
+              </div>
+              <Button asChild variant="outline" size="sm">
+                <Link to="/shop">ショップ</Link>
+              </Button>
+            </div>
+            <CosmeticBanner
+              background={cosmetic?.background}
+              backgroundImage={cosmetic?.background_image}
+              className="mt-3 h-14 rounded-lg border"
+            />
+            <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
+              {cosmetic?.title ? (
+                <NameDecorations title={cosmetic.title} />
+              ) : (
+                <span className="text-muted-foreground">称号：未装備</span>
+              )}
+              <span className="text-muted-foreground">
+                フレーム：{cosmetic?.frame || cosmetic?.frame_image ? "装備中" : "未装備"}
+              </span>
+              <span className="text-muted-foreground">
+                背景：{cosmetic?.background || cosmetic?.background_image ? "装備中" : "未装備"}
+              </span>
+            </div>
+          </div>
+
           <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-1.5">
               <Label>表示名</Label>
