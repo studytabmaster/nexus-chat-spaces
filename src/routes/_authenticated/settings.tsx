@@ -17,6 +17,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { PageHeader } from "@/components/app/PageHeader";
 import { LoadingState, ErrorState } from "@/components/app/EmptyState";
 import { STATUS_LABEL } from "@/lib/constants";
+import { useCosmetic } from "@/lib/cosmetics";
+import { CosmeticBanner } from "@/components/app/CosmeticBanner";
+import { NameDecorations } from "@/components/app/NameDecorations";
+import { Link } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/_authenticated/settings")({
   head: () => ({
