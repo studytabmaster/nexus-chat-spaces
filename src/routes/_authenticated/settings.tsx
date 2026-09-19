@@ -126,7 +126,13 @@ function SettingsPage() {
               className="group relative"
               aria-label="アバターを変更"
             >
-              <UserAvatar name={form.display_name} avatarUrl={avatarUrl} size="xl" />
+              <UserAvatar
+                name={form.display_name}
+                avatarUrl={avatarUrl}
+                size="xl"
+                frame={cosmetic?.frame}
+                frameImage={cosmetic?.frame_image}
+              />
               <span className="absolute inset-0 grid place-items-center rounded-3xl bg-black/40 text-white opacity-0 transition group-hover:opacity-100">
                 <Camera className="size-6" />
               </span>
