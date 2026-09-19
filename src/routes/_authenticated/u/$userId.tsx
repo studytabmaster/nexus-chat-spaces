@@ -119,7 +119,11 @@ function ProfilePage() {
         />
 
         <div className="overflow-hidden rounded-2xl border bg-card">
-          {cosmeticBg && <div className="h-24 w-full" style={cosmeticBg} />}
+          <CosmeticBanner
+            background={cosmetic?.background}
+            backgroundImage={cosmetic?.background_image}
+            className="h-24"
+          />
           <div className={cn("flex flex-col items-center gap-4 p-6 sm:flex-row sm:items-start", cosmeticBg && "-mt-10")}>
             <UserAvatar
               name={profile.data.display_name}
@@ -128,6 +132,7 @@ function ProfilePage() {
               status={profile.data.status}
               size="xl"
               frame={cosmetic?.frame}
+              frameImage={cosmetic?.frame_image}
             />
             <div className="flex-1 text-center sm:text-left">
               <h1 className="flex flex-wrap items-center justify-center gap-2 text-2xl font-extrabold sm:justify-start">
