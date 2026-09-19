@@ -43,7 +43,7 @@ function ProfilePage() {
   const myCommunities = useQuery(myCommunitiesQuery(me.data?.id ?? ""));
   const cosmetics = useCosmetics([userId]);
   const cosmetic = cosmetics[userId];
-  const cosmeticBg = backgroundStyle(cosmetic?.background);
+  const cosmeticBg = hasCosmeticBackground(cosmetic?.background, cosmetic?.background_image);
 
   const startDm = useMutation({
     mutationFn: async () => {
