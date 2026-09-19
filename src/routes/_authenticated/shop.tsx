@@ -70,8 +70,10 @@ function ShopPage() {
 
   const equip = useMutation({
     mutationFn: ({ itemId, on }: { itemId: string; on: boolean }) => equipItem(itemId, on),
-    onSuccess: () => {
+    onSuccess: (_d, v) => {
+      toast.success(v.on ? "装備しました" : "外しました");
       qc.invalidateQueries({ queryKey: ["shop-purchases", uid] });
+      invalidateCosmetics(qc);
     },
     onError: (e: Error) => toast.error(e.message),
   });
