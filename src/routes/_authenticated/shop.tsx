@@ -19,6 +19,7 @@ import {
   type ShopItem,
 } from "@/lib/shop";
 import { useSignedUrl } from "@/lib/storage";
+import { invalidateCosmetics, frameStyle, backgroundStyle, safeImage } from "@/lib/cosmetics";
 import { PageHeader } from "@/components/app/PageHeader";
 import { EmptyState, LoadingState } from "@/components/app/EmptyState";
 import { Button } from "@/components/ui/button";
@@ -70,8 +71,10 @@ function ShopPage() {
 
   const equip = useMutation({
     mutationFn: ({ itemId, on }: { itemId: string; on: boolean }) => equipItem(itemId, on),
-    onSuccess: () => {
+    onSuccess: (_d, v) => {
+      toast.success(v.on ? "装備しました" : "外しました");
       qc.invalidateQueries({ queryKey: ["shop-purchases", uid] });
+      invalidateCosmetics(qc);
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -138,20 +141,17 @@ function ShopPage() {
             )}
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {purchases.data?.map((p) => (
-                <div key={p.id} className="rounded-2xl border bg-card p-4">
-                  <Badge variant="secondary">{shopKindLabel(p.item?.kind ?? "")}</Badge>
-                  <p className="mt-2 font-semibold">{p.item?.name ?? "不明なアイテム"}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">{p.item?.description}</p>
-                  <Button
-                    variant={p.equipped ? "secondary" : "default"}
-                    size="sm"
-                    className="mt-3 w-full"
-                    disabled={equip.isPending}
-                    onClick={() => equip.mutate({ itemId: p.item_id, on: !p.equipped })}
-                  >
-                    {p.equipped ? "使用中（外す）" : "使う"}
-                  </Button>
-                </div>
+                <InventoryCard
+                  key={p.id}
+                  name={p.item?.name ?? "不明なアイテム"}
+                  description={p.item?.description ?? ""}
+                  kind={p.item?.kind ?? ""}
+                  payload={p.item?.payload ?? ""}
+                  imagePath={p.item?.image_url ?? null}
+                  equipped={p.equipped}
+                  pending={equip.isPending}
+                  onToggle={() => equip.mutate({ itemId: p.item_id, on: !p.equipped })}
+                />
               ))}
             </div>
           </TabsContent>
@@ -257,6 +257,68 @@ function ItemCard({
                     : "交換する"}
         </Button>
       </div>
+    </div>
+  );
+}
+
+/** インベントリの1枚（装備中の見た目をプレビューする） */
+function InventoryCard({
+  name,
+  description,
+  kind,
+  payload,
+  imagePath,
+  equipped,
+  pending,
+  onToggle,
+}: {
+  name: string;
+  description: string;
+  kind: string;
+  payload: string;
+  imagePath: string | null;
+  equipped: boolean;
+  pending: boolean;
+  onToggle: () => void;
+}) {
+  const { data: imageUrl } = useSignedUrl(safeImage(imagePath));
+  const frame = frameStyle(payload, kind === "frame" ? imageUrl : null);
+  const bg = backgroundStyle(payload, kind === "background" ? imageUrl : null);
+
+  return (
+    <div className="flex flex-col rounded-2xl border bg-card p-4">
+      <div className="flex items-center justify-between gap-2">
+        <Badge variant="secondary">{shopKindLabel(kind)}</Badge>
+        {equipped && <Badge>装備中</Badge>}
+      </div>
+
+      <div className="mt-3 grid h-20 place-items-center overflow-hidden rounded-xl border" style={bg ?? undefined}>
+        {kind === "frame" && frame ? (
+          <span style={frame}>
+            <span className="grid size-12 place-items-center rounded-xl bg-card text-xs text-muted-foreground">枠</span>
+          </span>
+        ) : kind === "title" ? (
+          <span className="rounded-md border border-primary/40 bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+            {payload || name}
+          </span>
+        ) : !bg && imageUrl ? (
+          <img src={imageUrl} alt={name} className="h-full w-full object-cover" />
+        ) : !bg ? (
+          <span className="text-2xl">{payload || "🎁"}</span>
+        ) : null}
+      </div>
+
+      <p className="mt-3 font-semibold">{name}</p>
+      <p className="mt-1 text-xs text-muted-foreground">{description}</p>
+      <Button
+        variant={equipped ? "secondary" : "default"}
+        size="sm"
+        className="mt-auto w-full pt-0 [margin-top:0.75rem]"
+        disabled={pending}
+        onClick={onToggle}
+      >
+        {equipped ? "使用中（外す）" : "使う"}
+      </Button>
     </div>
   );
 }

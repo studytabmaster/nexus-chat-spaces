@@ -39,6 +39,7 @@ export function MemberList({ communityId }: { communityId: string }) {
               showStatus
               size="sm"
               frame={cosmetics[m.user_id]?.frame}
+              frameImage={cosmetics[m.user_id]?.frame_image}
             />
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium">{m.profile.display_name}</p>

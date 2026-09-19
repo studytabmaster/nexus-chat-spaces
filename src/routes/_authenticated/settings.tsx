@@ -17,6 +17,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { PageHeader } from "@/components/app/PageHeader";
 import { LoadingState, ErrorState } from "@/components/app/EmptyState";
 import { STATUS_LABEL } from "@/lib/constants";
+import { useCosmetic } from "@/lib/cosmetics";
+import { CosmeticBanner } from "@/components/app/CosmeticBanner";
+import { NameDecorations } from "@/components/app/NameDecorations";
+import { Link } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/_authenticated/settings")({
   head: () => ({
@@ -37,6 +41,7 @@ function SettingsPage() {
   const qc = useQueryClient();
   const profile = useQuery(profileQuery(me.data?.id ?? ""));
   const fileRef = useRef<HTMLInputElement>(null);
+  const cosmetic = useCosmetic(me.data?.id);
 
   const [form, setForm] = useState<{
     display_name: string;
@@ -121,7 +126,13 @@ function SettingsPage() {
               className="group relative"
               aria-label="アバターを変更"
             >
-              <UserAvatar name={form.display_name} avatarUrl={avatarUrl} size="xl" />
+              <UserAvatar
+                name={form.display_name}
+                avatarUrl={avatarUrl}
+                size="xl"
+                frame={cosmetic?.frame}
+                frameImage={cosmetic?.frame_image}
+              />
               <span className="absolute inset-0 grid place-items-center rounded-3xl bg-black/40 text-white opacity-0 transition group-hover:opacity-100">
                 <Camera className="size-6" />
               </span>
@@ -139,6 +150,36 @@ function SettingsPage() {
             <div>
               <p className="font-semibold">アバター</p>
               <p className="text-sm text-muted-foreground">画像をタップして変更</p>
+            </div>
+          </div>
+
+          <div className="rounded-xl border p-4">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <p className="font-medium">装備中のアイテム</p>
+                <p className="text-sm text-muted-foreground">ショップで交換したアイテムがプロフィールに反映されます</p>
+              </div>
+              <Button asChild variant="outline" size="sm">
+                <Link to="/shop">ショップ</Link>
+              </Button>
+            </div>
+            <CosmeticBanner
+              background={cosmetic?.background}
+              backgroundImage={cosmetic?.background_image}
+              className="mt-3 h-14 rounded-lg border"
+            />
+            <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
+              {cosmetic?.title ? (
+                <NameDecorations title={cosmetic.title} />
+              ) : (
+                <span className="text-muted-foreground">称号：未装備</span>
+              )}
+              <span className="text-muted-foreground">
+                フレーム：{cosmetic?.frame || cosmetic?.frame_image ? "装備中" : "未装備"}
+              </span>
+              <span className="text-muted-foreground">
+                背景：{cosmetic?.background || cosmetic?.background_image ? "装備中" : "未装備"}
+              </span>
             </div>
           </div>
 
