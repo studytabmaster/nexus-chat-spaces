@@ -141,20 +141,17 @@ function ShopPage() {
             )}
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {purchases.data?.map((p) => (
-                <div key={p.id} className="rounded-2xl border bg-card p-4">
-                  <Badge variant="secondary">{shopKindLabel(p.item?.kind ?? "")}</Badge>
-                  <p className="mt-2 font-semibold">{p.item?.name ?? "不明なアイテム"}</p>
-                  <p className="mt-1 text-xs text-muted-foreground">{p.item?.description}</p>
-                  <Button
-                    variant={p.equipped ? "secondary" : "default"}
-                    size="sm"
-                    className="mt-3 w-full"
-                    disabled={equip.isPending}
-                    onClick={() => equip.mutate({ itemId: p.item_id, on: !p.equipped })}
-                  >
-                    {p.equipped ? "使用中（外す）" : "使う"}
-                  </Button>
-                </div>
+                <InventoryCard
+                  key={p.id}
+                  name={p.item?.name ?? "不明なアイテム"}
+                  description={p.item?.description ?? ""}
+                  kind={p.item?.kind ?? ""}
+                  payload={p.item?.payload ?? ""}
+                  imagePath={p.item?.image_url ?? null}
+                  equipped={p.equipped}
+                  pending={equip.isPending}
+                  onToggle={() => equip.mutate({ itemId: p.item_id, on: !p.equipped })}
+                />
               ))}
             </div>
           </TabsContent>
