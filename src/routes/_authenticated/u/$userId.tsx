@@ -18,7 +18,8 @@ import { userBadgesQuery } from "@/lib/community-extras";
 import { Badge as UiBadge } from "@/components/ui/badge";
 import { STATUS_LABEL } from "@/lib/constants";
 import { cn } from "@/lib/utils";
-import { useCosmetics, backgroundStyle } from "@/lib/cosmetics";
+import { useCosmetics } from "@/lib/cosmetics";
+import { CosmeticBanner, hasCosmeticBackground } from "@/components/app/CosmeticBanner";
 import { NameDecorations } from "@/components/app/NameDecorations";
 
 export const Route = createFileRoute("/_authenticated/u/$userId")({
