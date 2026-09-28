@@ -510,7 +510,20 @@ export function ChatView({
                 )}
                 {m.content && (
                   <p className="whitespace-pre-wrap break-words text-[15px] leading-relaxed">
-                    <Highlight text={m.content} emojis={customEmojis} />
+                    // purchases からスタンプ一覧を取得し、customEmojis と合体して渡す
+const allEmojis = useMemo(() => {
+  const shopEmojis = (purchases.data ?? [])
+    .filter((p) => (p.item?.kind === "sticker" || p.item?.kind === "emoji") && p.item.image_url)
+    .map((p) => ({
+      name: p.item!.payload || p.item!.name,
+      image_url: p.item!.image_url!,
+    }));
+  return [...customEmojis, ...shopEmojis];
+}, [customEmojis, purchases.data]);
+
+// レンダリング箇所:
+<Highlight text={m.content} emojis={allEmojis} />
+
                     {m.edited_at && <span className="ml-1 text-[10px] text-muted-foreground">(編集済み)</span>}
                   </p>
                 )}
