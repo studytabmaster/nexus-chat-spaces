@@ -9,6 +9,8 @@ import { useMembership } from "@/components/app/JoinButton";
 import { EmptyState, LoadingState } from "@/components/app/EmptyState";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { Hash, Lock, Archive } from "lucide-react";
+import { useMe } from "@/lib/auth";
+import { useMyRolePermissions } from "@/lib/roles";
 
 export const Route = createFileRoute("/_authenticated/c/$communityId/ch/$channelId")({
   head: () => ({
@@ -24,10 +26,19 @@ export const Route = createFileRoute("/_authenticated/c/$communityId/ch/$channel
 
 function ChannelPage() {
   const { communityId, channelId } = Route.useParams();
+  const me = useMe();
   const data = useQuery(channelsQuery(communityId));
   const members = useQuery(membersQuery(communityId));
   const membership = useMembership(communityId);
   const [thread, setThread] = useState<ChatMessage | null>(null);
+
+  const role = membership.data?.role ?? null;
+  const permissions = useMyRolePermissions(communityId, me.data?.id, role ?? undefined);
+  const canModerate =
+    role === "owner" ||
+    role === "admin" ||
+    role === "moderator" ||
+    permissions.has("manage_messages");
 
   if (data.isLoading || membership.isLoading) return <LoadingState />;
   const channel = data.data?.channels.find((c) => c.id === channelId);
@@ -37,8 +48,7 @@ function ChannelPage() {
         <EmptyState icon={Hash} title="チャンネルが見つかりません" />
       </div>
     );
-  const role = membership.data?.role ?? null;
-  const canModerate = role === "owner" || role === "admin" || role === "moderator";
+
   const locked = channel.locked || channel.archived;
   const canPost = !!role && (!locked || canModerate);
   const memberProfiles = members.data?.map((m) => m.profile);
