@@ -32,7 +32,8 @@ import { useSaved } from "@/lib/social";
 import { channelPollsQuery, type Poll } from "@/lib/events";
 import { UserAvatar } from "./UserAvatar";
 import { CustomEmojiPicker, EmojiImage, renderEmojiParts } from "./CustomEmoji";
-import { useCustomEmojis, type CustomEmoji as Emoji } from "@/lib/community-extras";
+import { useCustomEmojis } from "@/lib/community-extras";
+import { myPurchasesQuery } from "@/lib/shop";
 import { PollCard, CreatePollDialog } from "./PollCard";
 import { ReportDialog } from "./ReportDialog";
 import { Button } from "@/components/ui/button";
@@ -165,24 +166,47 @@ export function ChatView({
     return m;
   }, [polls.data]);
 
+  // ショップで購入したスタンプを取得
+  const purchases = useQuery({
+    ...myPurchasesQuery(me.data?.id),
+    enabled: !!me.data?.id,
+  });
+
+  // コミュニティ絵文字と購入したスタンプを合体してチャット本文で使えるようにする
+  const allEmojis = useMemo(() => {
+    const shopEmojis = (purchases.data ?? [])
+      .filter((p) => (p.item?.kind === "sticker" || p.item?.kind === "emoji") && p.item.image_url)
+      .map((p) => ({
+        id: p.id,
+        name: p.item!.payload || p.item!.name,
+        image_url: p.item!.image_url!,
+      }));
+    return [...customEmojis, ...shopEmojis];
+  }, [customEmojis, purchases.data]);
+
   // realtime（連続イベントをまとめて再取得し、通信量を抑える）
   useEffect(() => {
     let messageTimer: ReturnType<typeof setTimeout> | null = null;
     let sideTimer: ReturnType<typeof setTimeout> | null = null;
+
     const refetchMessages = () => {
+      // タブが裏にある時はSupabaseへのクエリを完全スキップ
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+
       if (messageTimer) return;
       messageTimer = setTimeout(() => {
         messageTimer = null;
-        if (document.visibilityState !== "visible") return;
         qc.invalidateQueries({ queryKey: ["chat", table, filterVal] });
         qc.invalidateQueries({ queryKey: ["thread-stats", filterVal] });
       }, 800);
     };
+
     const refetchSide = () => {
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+
       if (sideTimer) return;
       sideTimer = setTimeout(() => {
         sideTimer = null;
-        if (document.visibilityState !== "visible") return;
         qc.invalidateQueries({ queryKey: ["chat", table, filterVal] });
         qc.invalidateQueries({ queryKey: ["polls"] });
       }, 4000);
@@ -200,6 +224,7 @@ export function ChatView({
       ch.on("postgres_changes", { event: "*", schema: "public", table: "poll_votes" }, refetchSide);
     }
     ch.subscribe();
+
     return () => {
       if (messageTimer) clearTimeout(messageTimer);
       if (sideTimer) clearTimeout(sideTimer);
@@ -510,20 +535,7 @@ export function ChatView({
                 )}
                 {m.content && (
                   <p className="whitespace-pre-wrap break-words text-[15px] leading-relaxed">
-                    // purchases からスタンプ一覧を取得し、customEmojis と合体して渡す
-const allEmojis = useMemo(() => {
-  const shopEmojis = (purchases.data ?? [])
-    .filter((p) => (p.item?.kind === "sticker" || p.item?.kind === "emoji") && p.item.image_url)
-    .map((p) => ({
-      name: p.item!.payload || p.item!.name,
-      image_url: p.item!.image_url!,
-    }));
-  return [...customEmojis, ...shopEmojis];
-}, [customEmojis, purchases.data]);
-
-// レンダリング箇所:
-<Highlight text={m.content} emojis={allEmojis} />
-
+                    <Highlight text={m.content} emojis={allEmojis} />
                     {m.edited_at && <span className="ml-1 text-[10px] text-muted-foreground">(編集済み)</span>}
                   </p>
                 )}
@@ -922,7 +934,13 @@ function IconBtn({ label, onClick, children }: { label: string; onClick?: () => 
   );
 }
 
-function Highlight({ text, emojis = [] }: { text: string; emojis?: Emoji[] }) {
+function Highlight({
+  text,
+  emojis = [],
+}: {
+  text: string;
+  emojis?: { name: string; image_url: string }[];
+}) {
   const parts = text.split(/(@[a-z0-9_]+|https?:\/\/\S+)/gi);
   return (
     <>
