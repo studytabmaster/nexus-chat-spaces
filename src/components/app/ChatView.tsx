@@ -28,6 +28,7 @@ import { chatTime } from "@/lib/format";
 import { uploadFile, useSignedUrl } from "@/lib/storage";
 import { QUICK_EMOJIS } from "@/lib/constants";
 import { cn } from "@/lib/utils";
+import { throttleDelay } from "@/lib/quiet-hours";
 import { useSaved } from "@/lib/social";
 import { channelPollsQuery, type Poll } from "@/lib/events";
 import { UserAvatar } from "./UserAvatar";
@@ -80,63 +81,73 @@ export function ChatView({
 }: {
   source: Source;
   title: string;
-  subtitle?: string;
-  members?: Profile[];
+  subtitle?: string | undefined;
+  members?: Profile[] | undefined;
   headerExtra?: React.ReactNode;
-  threadRootId?: string | null;
-  onOpenThread?: (msg: ChatMessage) => void;
-  compact?: boolean;
-  postDisabledNote?: string;
+  /** 指定するとスレッド内の返信のみを表示する */
+  threadRootId?: string | undefined;
+  onOpenThread?: ((m: ChatMessage) => void) | undefined;
+  compact?: boolean | undefined;
+  /** 投稿できない理由の説明文（未指定なら参加を促す文言） */
+  postDisabledNote?: string | undefined;
 }) {
   const me = useMe();
   const qc = useQueryClient();
   const saved = useSaved();
-  const [text, setText] = useState("");
-  const [file, setFile] = useState<File | null>(null);
-  const [filePreview, setFilePreview] = useState<string | null>(null);
-  const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
-  const [editing, setEditing] = useState<ChatMessage | null>(null);
-  const [reportingMsg, setReportingMsg] = useState<ChatMessage | null>(null);
-  const [showPollDialog, setShowPollDialog] = useState(false);
-  const [sheetMessage, setSheetMessage] = useState<ChatMessage | null>(null);
-  const [customEmojiOpen, setCustomEmojiOpen] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const bottomRef = useRef<HTMLDivElement>(null);
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
-
-  // 荒らし対策用の送信監視
-  const lastSendTimeRef = useRef<number>(0);
-  const lastSentTextRef = useRef<string>("");
-
-  const table = source.kind === "channel" ? "messages" : "direct_messages";
-  const filterKey = source.kind === "channel" ? "channel_id" : "dm_id";
+  const customEmojis = useCustomEmojis(source.kind === "channel" ? source.communityId : undefined);
+  const table = source.kind === "channel" ? "messages" : "dm_messages";
+  const filterCol = source.kind === "channel" ? "channel_id" : "dm_id";
   const filterVal = source.kind === "channel" ? source.channelId : source.dmId;
-  const communityId = source.kind === "channel" ? source.communityId : undefined;
+  const key = ["chat", table, filterVal, threadRootId ?? "main"];
+  const canPost = source.kind === "dm" ? true : source.canPost;
+  const linkBase =
+    source.kind === "channel" ? `/c/${source.communityId}/ch/${source.channelId}` : `/dm/${source.dmId}`;
 
-  const key = useMemo(
-    () => ["chat", table, filterVal, threadRootId ?? "main"],
-    [table, filterVal, threadRootId],
-  );
-
-  const customEmojis = useCustomEmojis(communityId);
-  const memberRoles = useQuery({
-    ...memberRolesQuery(communityId),
-    enabled: !!communityId,
+  const messages = useQuery({
+    queryKey: key,
+    queryFn: async (): Promise<ChatMessage[]> => {
+      if (source.kind === "channel") {
+        let q = supabase
+          .from("messages")
+          .select("*, author:profiles!messages_user_id_fkey(*), reactions:message_reactions(*)")
+          .eq("channel_id", source.channelId);
+        q = threadRootId ? q.eq("thread_root_id", threadRootId) : q.is("thread_root_id", null);
+        const { data, error } = await q.order("created_at", { ascending: true }).limit(200);
+        if (error) throw error;
+        return data as unknown as ChatMessage[];
+      }
+      const { data, error } = await supabase
+        .from("dm_messages")
+        .select("*, author:profiles!dm_messages_user_id_fkey(*)")
+        .eq("dm_id", source.dmId)
+        .order("created_at", { ascending: true })
+        .limit(200);
+      if (error) throw error;
+      return data as unknown as ChatMessage[];
+    },
   });
-  const rolesByUser = useMemo(() => groupMemberRoles(memberRoles.data), [memberRoles.data]);
 
+  // 装備アイテム（称号・フレーム）とカスタムロールを名前の横に表示する
+  const cosmetics = useCosmetics((messages.data ?? []).map((m) => m.user_id));
+  const memberRoles = useQuery({
+    ...memberRolesQuery(source.kind === "channel" ? source.communityId : ""),
+    enabled: source.kind === "channel",
+  });
+  const rolesByUser = groupMemberRoles(memberRoles.data);
+
+  // スレッド返信数・最終返信
   const threadStats = useQuery({
     queryKey: ["thread-stats", filterVal],
     enabled: source.kind === "channel" && !threadRootId,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("messages")
-        .select("thread_root_id, created_at")
+        .select("id, thread_root_id, created_at")
         .eq("channel_id", filterVal)
         .not("thread_root_id", "is", null);
       if (error) throw error;
       const map = new Map<string, { count: number; last: string }>();
-      for (const r of data ?? []) {
+      for (const r of data) {
         const rootId = r.thread_root_id as string;
         const cur = map.get(rootId);
         if (!cur) map.set(rootId, { count: 1, last: r.created_at });
@@ -156,13 +167,13 @@ export function ChatView({
     return m;
   }, [polls.data]);
 
-  // ショップで購入したスタンプ
+  // ショップで購入したスタンプを取得
   const purchases = useQuery({
     ...myPurchasesQuery(me.data?.id),
     enabled: !!me.data?.id,
   });
 
-  // 絵文字とショップスタンプを合体
+  // コミュニティ絵文字と購入したスタンプを合体してチャット本文で使えるようにする
   const allEmojis = useMemo(() => {
     const shopEmojis = (purchases.data ?? [])
       .filter((p) => (p.item?.kind === "sticker" || p.item?.kind === "emoji") && p.item.image_url)
@@ -174,100 +185,119 @@ export function ChatView({
     return [...customEmojis, ...shopEmojis];
   }, [customEmojis, purchases.data]);
 
-  // Realtime購読（省エネデバウンス対応）
+  // realtime（連続イベントをまとめて再取得し、通信量を抑える）
   useEffect(() => {
     let messageTimer: ReturnType<typeof setTimeout> | null = null;
     let sideTimer: ReturnType<typeof setTimeout> | null = null;
 
     const refetchMessages = () => {
+      // タブが裏にある時はSupabaseへのクエリを完全スキップ
       if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+
       if (messageTimer) return;
       messageTimer = setTimeout(() => {
         messageTimer = null;
         qc.invalidateQueries({ queryKey: ["chat", table, filterVal] });
         qc.invalidateQueries({ queryKey: ["thread-stats", filterVal] });
-      }, 800);
+      }, throttleDelay(800, 3));
     };
 
     const refetchSide = () => {
       if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+
       if (sideTimer) return;
       sideTimer = setTimeout(() => {
         sideTimer = null;
         qc.invalidateQueries({ queryKey: ["chat", table, filterVal] });
-      }, 4000);
+        qc.invalidateQueries({ queryKey: ["polls"] });
+      }, throttleDelay(4000));
     };
 
-    const channelName = `chat-${table}-${filterVal}-${threadRootId ?? "main"}`;
-    const sub = supabase
-      .channel(channelName)
-      .on("postgres_changes", { event: "*", schema: "public", table, filter: `${filterKey}=eq.${filterVal}` }, refetchMessages);
-
+    const ch = supabase
+      .channel(`chat-${table}-${filterVal}-${threadRootId ?? "main"}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table, filter: `${filterCol}=eq.${filterVal}` },
+        refetchMessages,
+      );
     if (source.kind === "channel") {
-      sub
-        .on("postgres_changes", { event: "*", schema: "public", table: "message_reactions" }, refetchSide)
-        .on("postgres_changes", { event: "*", schema: "public", table: "poll_votes" }, refetchSide);
+      ch.on("postgres_changes", { event: "*", schema: "public", table: "message_reactions" }, refetchSide);
+      ch.on("postgres_changes", { event: "*", schema: "public", table: "poll_votes" }, refetchSide);
     }
-    sub.subscribe();
+    ch.subscribe();
 
     return () => {
       if (messageTimer) clearTimeout(messageTimer);
       if (sideTimer) clearTimeout(sideTimer);
-      supabase.removeChannel(sub);
+      supabase.removeChannel(ch);
     };
-  }, [table, filterVal, filterKey, source.kind, threadRootId, qc]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [table, filterVal, threadRootId]);
 
-  const messages = useQuery({
-    queryKey: key,
-    queryFn: async () => {
-      let q = supabase
-        .from(table)
-        .select(
-          table === "messages"
-            ? "*, author:profiles!messages_user_id_fkey(*), reactions:message_reactions(*)"
-            : "*, author:profiles!direct_messages_user_id_fkey(*)",
-        )
-        .eq(filterKey, filterVal)
-        .order("created_at", { ascending: true })
-        .limit(100);
+  // mark DM read
+  useEffect(() => {
+    if (source.kind !== "dm" || !me.data || !messages.data) return;
+    supabase
+      .from("dm_members")
+      .update({ last_read_at: new Date().toISOString() })
+      .eq("dm_id", source.dmId)
+      .eq("user_id", me.data.id)
+      .then(() => qc.invalidateQueries({ queryKey: ["dms"] }));
+  }, [source, me.data, messages.data, qc]);
 
-      if (source.kind === "channel") {
-        if (threadRootId) q = q.eq("thread_root_id", threadRootId);
-        else q = q.is("thread_root_id", null);
-      }
+  const [text, setText] = useState("");
+  const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
+  const [editing, setEditing] = useState<ChatMessage | null>(null);
+  const [file, setFile] = useState<File | null>(null);
+  const [showPinned, setShowPinned] = useState(false);
+  const [sheetMessage, setSheetMessage] = useState<ChatMessage | null>(null);
+  const [reportTarget, setReportTarget] = useState<ChatMessage | null>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const longPress = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
 
-      const { data, error } = await q;
-      if (error) throw error;
-      return (data ?? []) as unknown as ChatMessage[];
-    },
-  });
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ block: "end" });
+  }, [messages.data?.length]);
+
+  async function insertMessage(content: string) {
+    if (source.kind !== "channel") throw new Error("チャンネルではありません");
+    const { data, error } = await supabase
+      .from("messages")
+      .insert({
+        user_id: me.data!.id,
+        content,
+        channel_id: source.channelId,
+        community_id: source.communityId,
+        thread_root_id: threadRootId ?? null,
+      })
+      .select("id")
+      .single();
+    if (error) throw error;
+    qc.invalidateQueries({ queryKey: key });
+    return data.id as string;
+  }
 
   const send = useMutation({
     mutationFn: async () => {
-      if (!me.data) return;
+      if (!me.data) throw new Error("サインインしてください");
       const content = text.trim();
       if (!content && !file) return;
-
-      // --- 荒らし対策: 連投と重複テキストチェック ---
+      // 荒らし対策: 1.5秒以内の連投・同一内容の即時連投をブロック
       const now = Date.now();
-      if (now - lastSendTimeRef.current < 1500) {
-        throw new Error("メッセージ送信の間隔が早すぎます。少し時間を空けてください。");
+      const w = window as unknown as { __lastSend?: { t: number; c: string } };
+      const last = w.__lastSend;
+      if (last && (now - last.t < 1500 || (content && content === last.c && now - last.t < 10000))) {
+        throw new Error("送信が速すぎます。少し時間を空けてください");
       }
-      if (content && content === lastSentTextRef.current && now - lastSendTimeRef.current < 5000) {
-        throw new Error("同じメッセージを連続して送信することはできません。");
-      }
-      lastSendTimeRef.current = now;
-      lastSentTextRef.current = content;
-
+      w.__lastSend = { t: now, c: content };
       let attachment_url: string | null = null;
       let attachment_type: string | null = null;
       if (file) {
-        const ext = file.name.split(".").pop();
-        const path = `${source.kind}/${filterVal}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-        attachment_url = await uploadFile("attachments", path, file);
+        attachment_url = await uploadFile(me.data.id, file);
         attachment_type = file.type.startsWith("image/") ? "image" : "file";
       }
-
       if (editing) {
         const { error } = await supabase
           .from(table)
@@ -276,34 +306,21 @@ export function ChatView({
         if (error) throw error;
         return;
       }
-
-      const payload: Record<string, unknown> = {
-        [filterKey]: filterVal,
-        user_id: me.data.id,
-        content: content || (file ? "添付ファイル" : ""),
-        reply_to: replyTo?.id ?? null,
-        attachment_url,
-        attachment_type,
-      };
-      if (source.kind === "channel") {
-        payload.thread_root_id = threadRootId ?? null;
-      }
-
-      const { error } = await supabase.from(table).insert(payload);
-      if (error) throw error;
-
-      if (source.kind === "channel") {
-        recordActivity(me.data.id, "post_message", {
-          community_id: source.communityId,
-          channel_id: source.channelId,
-        });
-      }
-
-      const targets = new Set<string>();
-      const linkBase =
+      const base = { user_id: me.data.id, content, reply_to: replyTo?.id ?? null, attachment_url, attachment_type };
+      const { error } =
         source.kind === "channel"
-          ? `/c/${source.communityId}/ch/${source.channelId}`
-          : `/dm/${source.dmId}`;
+          ? await supabase.from("messages").insert({
+              ...base,
+              channel_id: source.channelId,
+              community_id: source.communityId,
+              thread_root_id: threadRootId ?? null,
+            })
+          : await supabase.from("dm_messages").insert({ ...base, dm_id: source.dmId });
+      if (error) throw error;
+      if (source.kind === "channel") await recordActivity("message");
+
+      // メンション・返信通知
+      const targets = new Set<string>();
       if (replyTo && replyTo.user_id !== me.data.id) targets.add(replyTo.user_id);
       const mentions = content.match(/@([a-z0-9_]+)/gi) ?? [];
       for (const m of mentions) {
@@ -330,13 +347,10 @@ export function ChatView({
       setReplyTo(null);
       setEditing(null);
       setFile(null);
-      setFilePreview(null);
       qc.invalidateQueries({ queryKey: key });
       qc.invalidateQueries({ queryKey: ["thread-stats", filterVal] });
     },
-    onError: (err: any) => {
-      toast.error(err?.message || "メッセージを送信できませんでした。");
-    },
+    onError: () => toast.error("メッセージを送信できませんでした。"),
   });
 
   const remove = useMutation({
@@ -344,10 +358,7 @@ export function ChatView({
       const { error } = await supabase.from(table).delete().eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => {
-      toast.success("メッセージを削除しました");
-      qc.invalidateQueries({ queryKey: key });
-    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: key }),
     onError: () => toast.error("この操作を実行する権限がありません。"),
   });
 
@@ -373,201 +384,252 @@ export function ChatView({
       }
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: key }),
+    onError: (e) => toast.error(e.message),
   });
 
-  const copyLink = (m: ChatMessage) => {
-    const url = new URL(window.location.href);
-    url.hash = `msg-${m.id}`;
-    navigator.clipboard.writeText(url.toString());
-    toast.success("メッセージのリンクをコピーしました");
-  };
+  const byId = useMemo(() => new Map(messages.data?.map((m) => [m.id, m])), [messages.data]);
+  const pinned = messages.data?.filter((m) => m.is_pinned) ?? [];
+  const mentionCandidates =
+    mentionQuery !== null
+      ? (members ?? []).filter((p) => p.username.startsWith(mentionQuery.toLowerCase())).slice(0, 5)
+      : [];
 
-  const report = (m: ChatMessage) => setReportingMsg(m);
+  function toggleSave(m: ChatMessage) {
+    saved.toggle.mutate({
+      kind: source.kind === "channel" ? "message" : "dm_message",
+      refId: m.id,
+      link: linkBase,
+      preview: `${m.author?.display_name ?? ""}: ${m.content}`,
+    });
+  }
 
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages.data?.length]);
+  function copyText(m: ChatMessage) {
+    navigator.clipboard?.writeText(m.content).then(
+      () => toast.success("コピーしました"),
+      () => toast.error("コピーできませんでした。"),
+    );
+  }
 
-  const canPost = source.kind === "channel" ? source.canPost : true;
+  function copyLink() {
+    navigator.clipboard?.writeText(`${window.location.origin}${linkBase}`).then(
+      () => toast.success("リンクをコピーしました"),
+      () => toast.error("コピーできませんでした。"),
+    );
+  }
+
+  function report(m: ChatMessage) {
+    setReportTarget(m);
+  }
+
+  function onKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+      e.preventDefault();
+      send.mutate();
+    }
+    if (e.key === "Escape") {
+      setReplyTo(null);
+      setEditing(null);
+      setText("");
+    }
+  }
+
+  function onChange(v: string) {
+    setText(v);
+    const m = v.slice(0, v.length).match(/@([a-z0-9_]*)$/i);
+    setMentionQuery(m ? m[1]! : null);
+  }
+
   const canModerate = source.kind === "channel" && source.canModerate;
 
-  const userIds = useMemo(() => {
-    const s = new Set<string>();
-    for (const m of messages.data ?? []) s.add(m.user_id);
-    return Array.from(s);
-  }, [messages.data]);
-  const cosmeticsMap = useCosmetics(userIds);
-
   return (
-    <div className="flex h-full min-h-0 flex-col bg-background">
+    <div className="flex h-full min-h-0 flex-col">
       {!compact && (
-        <header className="flex h-14 shrink-0 items-center justify-between border-b px-4">
-          <div className="flex min-w-0 items-center gap-2">
-            {source.kind === "channel" && <Hash className="size-5 shrink-0 text-muted-foreground" />}
-            <div className="min-w-0">
-              <h2 className="truncate font-semibold">{title}</h2>
-              {subtitle && <p className="truncate text-xs text-muted-foreground">{subtitle}</p>}
-            </div>
-          </div>
-          <div className="flex items-center gap-2">{headerExtra}</div>
+        <header className="flex h-12 shrink-0 items-center gap-2 border-b px-4">
+          {source.kind === "channel" ? <Hash className="size-4 text-muted-foreground" /> : null}
+          <h2 className="truncate font-bold">{title}</h2>
+          {subtitle && <span className="hidden truncate text-sm text-muted-foreground sm:inline">— {subtitle}</span>}
+          <div className="flex-1" />
+          {source.kind === "channel" && pinned.length > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowPinned((s) => !s)}
+              className="gap-1 text-muted-foreground"
+            >
+              <Pin className="size-4" /> {pinned.length}
+            </Button>
+          )}
+          {headerExtra}
         </header>
       )}
 
-      <div ref={scrollContainerRef} className="flex-1 space-y-3 overflow-y-auto p-4">
+      {showPinned && pinned.length > 0 && (
+        <div className="max-h-40 shrink-0 overflow-y-auto border-b bg-card px-4 py-2 text-sm">
+          <p className="mb-1 text-xs font-semibold text-muted-foreground">ピン留め</p>
+          {pinned.map((m) => (
+            <p key={m.id} className="truncate">
+              <span className="font-medium">{m.author?.display_name}</span>: {m.content}
+            </p>
+          ))}
+        </div>
+      )}
+
+      <div className="min-h-0 flex-1 overflow-y-auto px-2 py-4 md:px-4">
         {messages.isLoading && <LoadingState />}
-        {messages.isError && <ErrorState message="メッセージを読み込めませんでした。" />}
+        {messages.isError && <ErrorState message={messages.error.message} onRetry={() => messages.refetch()} />}
         {messages.data?.length === 0 && (
-          <div className="flex h-full flex-col items-center justify-center text-center text-muted-foreground">
-            <MessagesSquare className="mb-2 size-10 stroke-[1.5]" />
-            <p className="text-sm font-medium">まだメッセージはありません</p>
-            <p className="text-xs">最初のメッセージを投稿してみましょう！</p>
+          <div className="px-2 py-10 text-center text-sm text-muted-foreground">
+            {threadRootId ? "このスレッドにはまだ返信がありません。" : "まだメッセージはありません。最初の一言をどうぞ。"}
           </div>
         )}
-
-        {messages.data?.map((m) => {
+        {messages.data?.map((m, i) => {
+          const prev = messages.data![i - 1];
+          const grouped =
+            prev &&
+            prev.user_id === m.user_id &&
+            !m.reply_to &&
+            new Date(m.created_at).getTime() - new Date(prev.created_at).getTime() < 5 * 60 * 1000;
+          const parent = m.reply_to ? byId.get(m.reply_to) : null;
           const isMine = m.user_id === me.data?.id;
           const canEdit = isMine;
           const canDelete = isMine || canModerate;
-          const isOthers = !isMine;
+          const stats = threadStats.data?.get(m.id);
           const poll = pollByMessage.get(m.id);
-          const threadInfo = threadStats.data?.get(m.id);
-          const isReplying = replyTo?.id === m.id;
-          const userRolesList = rolesByUser.get(m.user_id) ?? [];
-          const cosmetic = cosmeticsMap[m.user_id];
-
           return (
             <div
               key={m.id}
-              id={`msg-${m.id}`}
-              className={cn(
-                "group relative flex gap-3 rounded-lg p-2 transition-colors hover:bg-muted/40",
-                isReplying && "bg-muted/60",
-                m.is_pinned && "border-l-2 border-primary bg-primary/5",
-              )}
+              onTouchStart={() => {
+                longPress.current = setTimeout(() => setSheetMessage(m), 500);
+              }}
+              onTouchEnd={() => longPress.current && clearTimeout(longPress.current)}
+              onTouchMove={() => longPress.current && clearTimeout(longPress.current)}
               onContextMenu={(e) => {
                 e.preventDefault();
                 setSheetMessage(m);
               }}
+              className={cn(
+                "group relative flex gap-3 rounded-lg px-2 hover:bg-surface-hover/60",
+                grouped ? "py-0.5" : "mt-3 py-1",
+                m.is_pinned && "border-l-2 border-primary/60",
+              )}
             >
-              <Link to="/u/$userId" params={{ userId: m.user_id }}>
-                <UserAvatar
-                  src={m.author?.avatar_url}
-                  fallback={m.author?.display_name || "U"}
-                  size="md"
-                  frame={cosmetic?.frame}
-                  frameImage={cosmetic?.frame_image}
-                />
-              </Link>
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-1.5 text-xs">
-                  <Link to="/u/$userId" params={{ userId: m.user_id }} className="font-semibold hover:underline">
-                    {m.author?.display_name || "ユーザー"}
+              <div className="w-10 shrink-0">
+                {!grouped && m.author && (
+                  <Link to="/u/$userId" params={{ userId: m.user_id }}>
+                    <UserAvatar
+                      name={m.author.display_name}
+                      avatarUrl={m.author.avatar_url}
+                      size="md"
+                      frame={cosmetics[m.user_id]?.frame}
+                      frameImage={cosmetics[m.user_id]?.frame_image}
+                    />
                   </Link>
-                  <NameDecorations
-                    title={cosmetic?.title}
-                    roles={userRolesList}
-                    maxRoles={2}
-                    size="sm"
-                  />
-                  <span className="text-muted-foreground">{chatTime(m.created_at)}</span>
-                  {m.edited_at && <span className="text-muted-foreground">(編集済)</span>}
-                  {m.is_pinned && (
-                    <span className="inline-flex items-center gap-0.5 text-primary">
-                      <Pin className="size-3" /> ピン留め
-                    </span>
-                  )}
-                </div>
-
-                {m.reply_to && (
-                  <div className="my-1 rounded border-l-2 border-primary/50 bg-muted/40 px-2 py-0.5 text-xs text-muted-foreground">
-                    <Reply className="mr-1 inline size-3" /> 返信先メッセージ
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                {parent && (
+                  <p className="mb-0.5 flex items-center gap-1 truncate text-xs text-muted-foreground">
+                    <Reply className="size-3" /> <span className="font-medium">{parent.author?.display_name}</span>{" "}
+                    {parent.content}
+                  </p>
+                )}
+                {!grouped && (
+                  <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                    <Link to="/u/$userId" params={{ userId: m.user_id }} className="text-sm font-bold hover:underline">
+                      {m.author?.display_name ?? "Unknown"}
+                    </Link>
+                    <NameDecorations title={cosmetics[m.user_id]?.title} roles={rolesByUser[m.user_id]} />
+                    <span className="text-[11px] text-muted-foreground">{chatTime(m.created_at)}</span>
                   </div>
                 )}
-
-                <div className="break-words text-sm leading-relaxed text-foreground">
-                  <Highlight text={m.content} emojis={allEmojis} />
-                </div>
-
-                {poll && (
-                  <div className="mt-2">
-                    <PollCard poll={poll} currentUserId={me.data?.id} />
-                  </div>
+                {m.content && (
+                  <p className="whitespace-pre-wrap break-words text-[15px] leading-relaxed">
+                    <Highlight text={m.content} emojis={allEmojis} />
+                    {m.edited_at && <span className="ml-1 text-[10px] text-muted-foreground">(編集済み)</span>}
+                  </p>
                 )}
-
-                {m.attachment_url && (
-                  <Attachment path={m.attachment_url} type={m.attachment_type} />
-                )}
-
+                {m.attachment_url && <Attachment path={m.attachment_url} type={m.attachment_type} />}
+                {poll && <PollCard poll={poll} />}
                 {m.reactions && m.reactions.length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-1">
-                    {Array.from(new Set(m.reactions.map((r) => r.emoji))).map((emoji) => {
-                      const count = m.reactions!.filter((r) => r.emoji === emoji).length;
-                      const hasMine = m.reactions!.some((r) => r.emoji === emoji && r.user_id === me.data?.id);
-                      return (
-                        <button
-                          key={emoji}
-                          onClick={() => react.mutate({ m, emoji })}
-                          className={cn(
-                            "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium transition-colors",
-                            hasMine ? "border-primary bg-primary/10 text-primary" : "bg-muted/40 text-muted-foreground hover:bg-muted",
-                          )}
-                        >
-                          <span>{emoji}</span>
-                          <span>{count}</span>
-                        </button>
-                      );
-                    })}
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    {Object.entries(
+                      m.reactions.reduce<Record<string, Reaction[]>>((acc, r) => {
+                        (acc[r.emoji] ??= []).push(r);
+                        return acc;
+                      }, {}),
+                    ).map(([emoji, rs]) => (
+                      <button
+                        key={emoji}
+                        onClick={() => react.mutate({ m, emoji })}
+                        className={cn(
+                          "rounded-full border px-2 py-0.5 text-xs transition-colors hover:bg-accent",
+                          rs.some((r) => r.user_id === me.data?.id) && "border-primary/50 bg-primary/15",
+                        )}
+                      >
+                        {emoji} {rs.length}
+                      </button>
+                    ))}
                   </div>
                 )}
-
-                {source.kind === "channel" && !threadRootId && onOpenThread && (
-                  <div className="mt-1">
-                    <button
-                      onClick={() => onOpenThread(m)}
-                      className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-                    >
-                      <MessagesSquare className="size-3.5" />
-                      {threadInfo ? `${threadInfo.count} 件の返信` : "スレッドを開始"}
-                    </button>
-                  </div>
+                {stats && onOpenThread && (
+                  <button
+                    onClick={() => onOpenThread(m)}
+                    className="mt-1 inline-flex items-center gap-1.5 rounded-lg border border-transparent bg-accent/50 px-2 py-1 text-xs font-medium text-primary hover:border-primary/40"
+                  >
+                    <MessagesSquare className="size-3.5" /> スレッド {stats.count}件
+                    <span className="font-normal text-muted-foreground">最終返信 {chatTime(stats.last)}</span>
+                  </button>
                 )}
               </div>
 
-                <div className="absolute right-2 top-2 hidden items-center gap-0.5 rounded-lg border bg-background/95 p-0.5 shadow-sm backdrop-blur group-hover:flex">
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <button className="rounded p-1 hover:bg-muted" title="リアクション">
-                        <SmilePlus className="size-3.5 text-muted-foreground" />
-                      </button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-1" align="end">
-                      <div className="flex gap-1">
-                        {QUICK_EMOJIS.map((e) => (
-                          <button
-                            key={e}
-                            className="p-1 hover:scale-125 transition-transform"
-                            onClick={() => react.mutate({ m, emoji: e })}
-                          >
-                            {e}
-                          </button>
-                        ))}
-                      </div>
-                    </PopoverContent>
-                  </Popover>
-
-                  <IconBtn label="返信" onClick={() => setReplyTo(m)}>
-                    <Reply className="size-3.5" />
+              {canPost && (
+                <div className="absolute -top-3 right-2 hidden items-center rounded-lg border bg-popover shadow-md group-hover:md:flex">
+                  {source.kind === "channel" && (
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <IconBtn label="リアクション">
+                          <SmilePlus className="size-4" />
+                        </IconBtn>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-1" align="end">
+                        <div className="flex gap-0.5">
+                          {QUICK_EMOJIS.map((e) => (
+                            <button
+                              key={e}
+                              onClick={() => react.mutate({ m, emoji: e })}
+                              className="rounded-md p-1.5 text-lg hover:bg-accent"
+                            >
+                              {e}
+                            </button>
+                          ))}
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                  )}
+                  <IconBtn
+                    label="返信"
+                    onClick={() => {
+                      setEditing(null);
+                      setReplyTo(m);
+                    }}
+                  >
+                    <Reply className="size-4" />
                   </IconBtn>
-                  <IconBtn label="ブックマーク" onClick={() => saved.toggle(m.id)}>
+                  {onOpenThread && (
+                    <IconBtn label="スレッド" onClick={() => onOpenThread(m)}>
+                      <MessagesSquare className="size-4" />
+                    </IconBtn>
+                  )}
+                  <IconBtn label={saved.isSaved(m.id) ? "保存を解除" : "保存"} onClick={() => toggleSave(m)}>
                     {saved.isSaved(m.id) ? (
-                      <BookmarkCheck className="size-3.5 text-primary" />
+                      <BookmarkCheck className="size-4 text-primary" />
                     ) : (
-                      <Bookmark className="size-3.5" />
+                      <Bookmark className="size-4" />
                     )}
                   </IconBtn>
                   {canModerate && (
                     <IconBtn label={m.is_pinned ? "ピン解除" : "ピン留め"} onClick={() => togglePin.mutate(m)}>
-                      <Pin className={cn("size-3.5", m.is_pinned && "text-primary")} />
+                      <Pin className={cn("size-4", m.is_pinned && "text-primary")} />
                     </IconBtn>
                   )}
                   {canEdit && (
@@ -579,52 +641,96 @@ export function ChatView({
                         setText(m.content);
                       }}
                     >
-                      <Pencil className="size-3.5" />
+                      <Pencil className="size-4" />
                     </IconBtn>
                   )}
                   {canDelete && (
-                    <IconBtn
-                      label={isOthers ? "モデレーターとして削除" : "削除"}
-                      onClick={() => {
-                        if (isOthers && !confirm("このメッセージをモデレーターとして削除しますか？")) return;
-                        remove.mutate(m.id);
-                      }}
-                    >
-                      <Trash2 className="size-3.5 text-destructive" />
+                    <IconBtn label="削除" onClick={() => remove.mutate(m.id)}>
+                      <Trash2 className="size-4 text-destructive" />
                     </IconBtn>
                   )}
                 </div>
+              )}
             </div>
           );
         })}
         <div ref={bottomRef} />
       </div>
 
+      {/* スマホ: 長押し / PC: 右クリック の操作メニュー */}
       <Sheet open={!!sheetMessage} onOpenChange={(o) => !o && setSheetMessage(null)}>
-        <SheetContent side="bottom" className="p-4">
-          <SheetHeader>
-            <SheetTitle>メッセージ操作</SheetTitle>
+        <SheetContent side="bottom" className="rounded-t-2xl p-0">
+          <SheetHeader className="border-b px-4 py-3 text-left">
+            <SheetTitle className="truncate text-sm font-semibold">
+              {sheetMessage?.author?.display_name}: {sheetMessage?.content?.slice(0, 40)}
+            </SheetTitle>
           </SheetHeader>
           {sheetMessage && (
-            <div className="mt-4 grid gap-2">
+            <div className="max-h-[60dvh] overflow-y-auto p-2">
+              {source.kind === "channel" && canPost && (
+                <div className="flex gap-1 px-2 pb-2">
+                  {QUICK_EMOJIS.map((e) => (
+                    <button
+                      key={e}
+                      className="rounded-md p-2 text-xl hover:bg-accent"
+                      onClick={() => {
+                        react.mutate({ m: sheetMessage, emoji: e });
+                        setSheetMessage(null);
+                      }}
+                    >
+                      {e}
+                    </button>
+                  ))}
+                </div>
+              )}
               <SheetAction
                 icon={Reply}
                 label="返信"
+                show={canPost}
                 onClick={() => {
+                  setEditing(null);
                   setReplyTo(sheetMessage);
+                  setSheetMessage(null);
+                }}
+              />
+              <SheetAction
+                icon={MessagesSquare}
+                label="スレッドを開く"
+                show={!!onOpenThread}
+                onClick={() => {
+                  onOpenThread?.(sheetMessage);
+                  setSheetMessage(null);
+                }}
+              />
+              <SheetAction
+                icon={saved.isSaved(sheetMessage.id) ? BookmarkCheck : Bookmark}
+                label={saved.isSaved(sheetMessage.id) ? "保存を解除" : "保存"}
+                show
+                onClick={() => {
+                  toggleSave(sheetMessage);
+                  setSheetMessage(null);
+                }}
+              />
+              <SheetAction
+                icon={Copy}
+                label="コピー"
+                show
+                onClick={() => {
+                  copyText(sheetMessage);
                   setSheetMessage(null);
                 }}
               />
               <SheetAction
                 icon={Copy}
                 label="リンクをコピー"
+                show
                 onClick={() => {
-                  copyLink(sheetMessage);
+                  copyLink();
                   setSheetMessage(null);
                 }}
               />
               <SheetAction
-                icon={sheetMessage.is_pinned ? Pin : Pin}
+                icon={Pin}
                 label={sheetMessage.is_pinned ? "ピン解除" : "ピン留め"}
                 show={canModerate}
                 onClick={() => {
@@ -645,12 +751,10 @@ export function ChatView({
               />
               <SheetAction
                 icon={Trash2}
-                label={sheetMessage.user_id === me.data?.id ? "削除" : "モデレーターとして削除"}
+                label="削除"
                 destructive
                 show={sheetMessage.user_id === me.data?.id || canModerate}
                 onClick={() => {
-                  const isOthers = sheetMessage.user_id !== me.data?.id;
-                  if (isOthers && !confirm("このメッセージを削除しますか？")) return;
                   remove.mutate(sheetMessage.id);
                   setSheetMessage(null);
                 }}
@@ -669,160 +773,129 @@ export function ChatView({
         </SheetContent>
       </Sheet>
 
-      {reportingMsg && (
+      {reportTarget && (
         <ReportDialog
-          open={!!reportingMsg}
-          onOpenChange={(o) => !o && setReportingMsg(null)}
-          target={{
-            type: "message",
-            id: reportingMsg.id,
-            communityId,
-            reportedUserId: reportingMsg.user_id,
-            snippet: reportingMsg.content,
-          }}
+          open
+          onOpenChange={(o) => !o && setReportTarget(null)}
+          targetType="message"
+          targetId={reportTarget.id}
+          communityId={source.kind === "channel" ? source.communityId : null}
+          link={linkBase}
+          preview={`${reportTarget.author?.display_name ?? ""}: ${reportTarget.content?.slice(0, 120) ?? ""}`}
         />
       )}
 
-      {source.kind === "channel" && (
-        <CreatePollDialog
-          open={showPollDialog}
-          onOpenChange={setShowPollDialog}
-          channelId={source.channelId}
-        />
-      )}
-
-      <div className="border-t p-3">
-        {replyTo && (
-          <div className="mb-2 flex items-center justify-between rounded bg-muted/60 px-3 py-1.5 text-xs">
-            <span className="truncate">
-              <Reply className="mr-1 inline size-3" />
-              <strong>{replyTo.author?.display_name}</strong> に返信中: {replyTo.content.slice(0, 50)}
-            </span>
-            <button onClick={() => setReplyTo(null)} className="hover:text-foreground">
-              <X className="size-3.5" />
-            </button>
-          </div>
-        )}
-
-        {editing && (
-          <div className="mb-2 flex items-center justify-between rounded bg-muted/60 px-3 py-1.5 text-xs">
-            <span className="truncate">
-              <Pencil className="mr-1 inline size-3" /> メッセージを編集中
-            </span>
-            <button
-              onClick={() => {
-                setEditing(null);
-                setText("");
-              }}
-              className="hover:text-foreground"
-            >
-              <X className="size-3.5" />
-            </button>
-          </div>
-        )}
-
-        {file && (
-          <div className="mb-2 flex items-center gap-2 rounded border bg-muted/30 p-2 text-xs">
-            {filePreview ? (
-              <img src={filePreview} alt="preview" className="size-10 rounded object-cover" />
-            ) : (
-              <ImageIcon className="size-8 text-muted-foreground" />
-            )}
-            <span className="flex-1 truncate">{file.name}</span>
-            <button
-              onClick={() => {
-                setFile(null);
-                setFilePreview(null);
-              }}
-              className="rounded p-1 hover:bg-muted"
-            >
-              <X className="size-4" />
-            </button>
-          </div>
-        )}
-
+      <div className="shrink-0 border-t bg-background p-3">
         {!canPost ? (
-          <div className="flex items-center justify-center gap-2 rounded-lg border bg-muted/30 p-3 text-sm text-muted-foreground">
-            <Lock className="size-4" />
-            <span>{postDisabledNote || "このチャンネルには投稿できません"}</span>
+          <div className="flex items-center justify-center gap-2 rounded-xl border border-dashed py-3 text-sm text-muted-foreground">
+            <Lock className="size-4" /> {postDisabledNote ?? "メッセージを送るにはコミュニティに参加してください"}
           </div>
         ) : (
-          <div className="flex items-end gap-2">
-            <input
-              ref={fileInputRef}
-              type="file"
-              className="hidden"
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) {
-                  setFile(f);
-                  if (f.type.startsWith("image/")) {
-                    setFilePreview(URL.createObjectURL(f));
-                  }
-                }
-              }}
-            />
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-9 shrink-0"
-              onClick={() => fileInputRef.current?.click()}
-              title="ファイルを添付"
-            >
-              <Paperclip className="size-4" />
-            </Button>
-
-            <Popover open={customEmojiOpen} onOpenChange={setCustomEmojiOpen}>
-              <PopoverTrigger asChild>
-                <Button variant="ghost" size="icon" className="size-9 shrink-0" title="スタンプ・絵文字">
-                  <SmilePlus className="size-4" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-80 p-0" align="start">
-                <CustomEmojiPicker
-                  communityId={communityId}
-                  onPick={(token) => {
-                    setText((prev) => prev + token);
-                    setCustomEmojiOpen(false);
+          <div className="relative rounded-xl border bg-card focus-within:ring-1 focus-within:ring-ring">
+            {(replyTo || editing) && (
+              <div className="flex items-center gap-2 border-b px-3 py-1.5 text-xs text-muted-foreground">
+                {editing ? <Pencil className="size-3" /> : <Reply className="size-3" />}
+                <span className="truncate">
+                  {editing
+                    ? "メッセージを編集中"
+                    : `${replyTo?.author?.display_name}さんへの返信「${replyTo?.content?.slice(0, 40)}」`}
+                </span>
+                <button
+                  className="ml-auto"
+                  onClick={() => {
+                    setReplyTo(null);
+                    setEditing(null);
+                    setText("");
                   }}
-                />
-              </PopoverContent>
-            </Popover>
-
-            {source.kind === "channel" && (
+                  aria-label="返信をやめる"
+                >
+                  <X className="size-3.5" />
+                </button>
+              </div>
+            )}
+            {file && (
+              <div className="flex items-center gap-2 border-b px-3 py-1.5 text-xs">
+                <Paperclip className="size-3" /> <span className="truncate">{file.name}</span>
+                <button className="ml-auto" onClick={() => setFile(null)} aria-label="添付を外す">
+                  <X className="size-3.5" />
+                </button>
+              </div>
+            )}
+            {mentionCandidates.length > 0 && (
+              <div className="absolute bottom-full left-2 mb-1 w-64 rounded-lg border bg-popover p-1 shadow-lg">
+                {mentionCandidates.map((p) => (
+                  <button
+                    key={p.id}
+                    className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-accent"
+                    onClick={() => {
+                      setText((t) => t.replace(/@([a-z0-9_]*)$/i, `@${p.username} `));
+                      setMentionQuery(null);
+                    }}
+                  >
+                    <UserAvatar
+                      name={p.display_name}
+                      avatarUrl={p.avatar_url}
+                      size="xs"
+                      showStatus={p.show_online}
+                      status={p.status}
+                    />
+                    <span className="font-medium">{p.display_name}</span>
+                    <span className="text-muted-foreground">@{p.username}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            <div className="flex items-end gap-1 p-1.5">
+              <input
+                ref={fileRef}
+                type="file"
+                className="hidden"
+                onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+              />
               <Button
+                type="button"
                 variant="ghost"
                 size="icon"
-                className="size-9 shrink-0"
-                onClick={() => setShowPollDialog(true)}
-                title="投票を作成"
+                className="shrink-0"
+                onClick={() => fileRef.current?.click()}
+                aria-label="ファイルを添付"
               >
-                <BarChart3 className="size-4" />
+                <Paperclip className="size-4" />
               </Button>
-            )}
-
-            <Textarea
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  send.mutate();
-                }
-              }}
-              placeholder="メッセージを入力... (Enterで送信, Shift+Enterで改行)"
-              rows={1}
-              className="min-h-[38px] resize-none py-2"
-            />
-
-            <Button
-              size="icon"
-              className="size-9 shrink-0"
-              disabled={(!text.trim() && !file) || send.isPending}
-              onClick={() => send.mutate()}
-            >
-              <Send className="size-4" />
-            </Button>
+              {source.kind === "channel" && (
+                <CustomEmojiPicker communityId={source.communityId} onPick={(token) => onChange(`${text}${token} `)} />
+              )}
+              {source.kind === "channel" && (
+                <CreatePollDialog
+                  communityId={source.communityId}
+                  channelId={source.channelId}
+                  onCreate={async (q) => ({ messageId: await insertMessage(`投票: ${q}`) })}
+                  trigger={
+                    <Button type="button" variant="ghost" size="icon" className="shrink-0" aria-label="投票を作成">
+                      <BarChart3 className="size-4" />
+                    </Button>
+                  }
+                />
+              )}
+              <Textarea
+                value={text}
+                onChange={(e) => onChange(e.target.value)}
+                onKeyDown={onKeyDown}
+                rows={1}
+                placeholder={threadRootId ? "スレッドに返信" : `#${title} にメッセージを送信`}
+                className="max-h-40 min-h-9 resize-none border-0 bg-transparent px-2 py-2 shadow-none focus-visible:ring-0"
+              />
+              <Button
+                type="button"
+                size="icon"
+                className="shrink-0"
+                onClick={() => send.mutate()}
+                disabled={send.isPending || (!text.trim() && !file)}
+                aria-label="送信"
+              >
+                <Send className="size-4" />
+              </Button>
+            </div>
           </div>
         )}
       </div>
@@ -834,42 +907,34 @@ function SheetAction({
   icon: Icon,
   label,
   onClick,
+  show,
   destructive,
-  show = true,
 }: {
-  icon: any;
+  icon: typeof Reply;
   label: string;
   onClick: () => void;
-  destructive?: boolean;
   show?: boolean;
+  destructive?: boolean;
 }) {
   if (!show) return null;
   return (
     <button
       onClick={onClick}
       className={cn(
-        "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors hover:bg-accent",
-        destructive && "text-destructive hover:bg-destructive/10 hover:text-destructive",
+        "flex w-full items-center gap-3 rounded-lg px-4 py-3 text-left text-sm hover:bg-accent",
+        destructive && "text-destructive",
       )}
     >
-      <Icon className="size-4" />
-      <span>{label}</span>
+      <Icon className="size-4" /> {label}
     </button>
   );
 }
 
-function IconBtn({
-  label,
-  onClick,
-  children,
-}: {
-  label: string;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
+function IconBtn({ label, onClick, children }: { label: string; onClick?: () => void; children: React.ReactNode }) {
   return (
     <button
       onClick={onClick}
+      aria-label={label}
       title={label}
       className="rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
     >

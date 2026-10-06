@@ -27,6 +27,7 @@ import { useMe } from "@/lib/auth";
 import { shortDate } from "@/lib/format";
 import { MemberManagePanel } from "@/components/app/MemberManagePanel";
 import { RoleManager } from "@/components/app/RoleManager";
+import { useMyRolePermissions } from "@/lib/roles";
 import { dashboardQuery, useDashboardRealtime } from "@/lib/dashboard";
 import { chatTime } from "@/lib/format";
 import { Users, Wifi, UserPlus2 } from "lucide-react";
@@ -59,8 +60,21 @@ function CommunitySettingsPage() {
   const membership = useMembership(communityId);
   const role = membership.data?.role;
   const canManage = role === "owner" || role === "admin";
+  const me = useMe();
+  const perms = useMyRolePermissions(communityId, me.data?.id, role ?? undefined);
+  const canRoles = perms.has("manage_roles");
 
   if (membership.isLoading) return <LoadingState />;
+  if (!canManage && canRoles) {
+    return (
+      <div className="h-full overflow-y-auto">
+        <div className="mx-auto max-w-4xl px-4 py-6 md:px-8">
+          <PageHeader title="ロール管理" subtitle="ロール管理の権限があるため、ロールの作成・編集・付与ができます" />
+          <RoleManager communityId={communityId} />
+        </div>
+      </div>
+    );
+  }
   if (!canManage) {
     return (
       <div className="p-8">
