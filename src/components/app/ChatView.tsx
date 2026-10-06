@@ -29,6 +29,7 @@ import { uploadFile, useSignedUrl } from "@/lib/storage";
 import { QUICK_EMOJIS } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import { throttleDelay } from "@/lib/quiet-hours";
+import { usePageVisible } from "@/lib/use-page-visible";
 import { useSaved } from "@/lib/social";
 import { channelPollsQuery, type Poll } from "@/lib/events";
 import { UserAvatar } from "./UserAvatar";
@@ -186,7 +187,18 @@ export function ChatView({
   }, [customEmojis, purchases.data]);
 
   // realtime（連続イベントをまとめて再取得し、通信量を抑える）
+  // 画面が裏にある間は接続自体を切り、戻ったときに1回だけ最新を取得する
+  const pageVisible = usePageVisible();
+  const wasHidden = useRef(false);
   useEffect(() => {
+    if (!pageVisible) {
+      wasHidden.current = true;
+      return;
+    }
+    if (wasHidden.current) {
+      wasHidden.current = false;
+      qc.invalidateQueries({ queryKey: ["chat", table, filterVal] });
+    }
     let messageTimer: ReturnType<typeof setTimeout> | null = null;
     let sideTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -220,10 +232,9 @@ export function ChatView({
         { event: "*", schema: "public", table, filter: `${filterCol}=eq.${filterVal}` },
         refetchMessages,
       );
-    if (source.kind === "channel") {
-      ch.on("postgres_changes", { event: "*", schema: "public", table: "message_reactions" }, refetchSide);
-      ch.on("postgres_changes", { event: "*", schema: "public", table: "poll_votes" }, refetchSide);
-    }
+    // リアクション・投票は全コミュニティ分が届いてしまうため購読しない
+    // （自分の操作は即時反映、他人の分は次のメッセージ更新時にまとめて反映）
+    void refetchSide;
     ch.subscribe();
 
     return () => {
@@ -232,7 +243,7 @@ export function ChatView({
       supabase.removeChannel(ch);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [table, filterVal, threadRootId]);
+  }, [table, filterVal, threadRootId, pageVisible]);
 
   // mark DM read
   useEffect(() => {

@@ -109,7 +109,7 @@ export function useDashboardRealtime(communityId: string) {
     const poll = setInterval(() => {
       if (isQuietHours()) return; // 深夜帯は定期更新を止める（変化はリアルタイム通知で反映）
       if (document.visibilityState === "visible") qc.invalidateQueries({ queryKey: ["dashboard", communityId] });
-    }, 60_000);
+    }, 120_000);
     return () => {
       if (timer) clearTimeout(timer);
       clearInterval(poll);
