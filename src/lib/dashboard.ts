@@ -1,3 +1,4 @@
+import { usePageVisible } from "@/lib/use-page-visible";
 import { isQuietHours, throttleDelay } from "@/lib/quiet-hours";
 import { useEffect } from "react";
 import { queryOptions, useQueryClient } from "@tanstack/react-query";
@@ -81,8 +82,9 @@ export function dashboardQuery(communityId: string) {
 /** メンバー・通報・オンライン状態の変化を購読して数値を即時更新する。 */
 export function useDashboardRealtime(communityId: string) {
   const qc = useQueryClient();
+  const visible = usePageVisible();
   useEffect(() => {
-    if (!communityId) return;
+    if (!communityId || !visible) return; // 裏に回ったら接続を切る
     let timer: ReturnType<typeof setTimeout> | null = null;
     // 参加・通報の変化だけを購読し、まとめて再集計する（オンライン数は定期更新）
     const invalidate = () => {
@@ -115,5 +117,5 @@ export function useDashboardRealtime(communityId: string) {
       clearInterval(poll);
       supabase.removeChannel(channel);
     };
-  }, [communityId, qc]);
+  }, [communityId, qc, visible]);
 }

@@ -8,5 +8,5 @@
 > Commits you push to the connected branch sync back to Lovable and show up in
 > the editor, so keep the branch in a working state.
 <!-- LOVABLE:END -->
-- Quiet-hours throttling lives in src/lib/quiet-hours.ts; realtime/poll timers use throttleDelay() so off-peak traffic stays low.
+- Quiet-hours throttling lives in src/lib/quiet-hours.ts and realtime channels disconnect while the page is hidden (usePageVisible); avoid unfiltered postgres_changes subscriptions because they fan out to every subscriber.
 - Community permissions are checked in DB via has_community_perm(); custom roles can only grant permissions the creator holds (trigger guard).
