@@ -28,6 +28,7 @@ import { chatTime } from "@/lib/format";
 import { uploadFile, useSignedUrl } from "@/lib/storage";
 import { QUICK_EMOJIS } from "@/lib/constants";
 import { cn } from "@/lib/utils";
+import { throttleDelay } from "@/lib/quiet-hours";
 import { useSaved } from "@/lib/social";
 import { channelPollsQuery, type Poll } from "@/lib/events";
 import { UserAvatar } from "./UserAvatar";
@@ -198,7 +199,7 @@ export function ChatView({
         messageTimer = null;
         qc.invalidateQueries({ queryKey: ["chat", table, filterVal] });
         qc.invalidateQueries({ queryKey: ["thread-stats", filterVal] });
-      }, 800);
+      }, throttleDelay(800, 3));
     };
 
     const refetchSide = () => {
@@ -209,7 +210,7 @@ export function ChatView({
         sideTimer = null;
         qc.invalidateQueries({ queryKey: ["chat", table, filterVal] });
         qc.invalidateQueries({ queryKey: ["polls"] });
-      }, 4000);
+      }, throttleDelay(4000));
     };
 
     const ch = supabase
