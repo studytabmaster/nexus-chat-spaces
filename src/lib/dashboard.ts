@@ -1,3 +1,4 @@
+import { isQuietHours, throttleDelay } from "@/lib/quiet-hours";
 import { useEffect } from "react";
 import { queryOptions, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -90,7 +91,7 @@ export function useDashboardRealtime(communityId: string) {
         timer = null;
         if (document.visibilityState !== "visible") return;
         qc.invalidateQueries({ queryKey: ["dashboard", communityId] });
-      }, 3000);
+      }, throttleDelay(3000));
     };
     const channel = supabase
       .channel(`dashboard:${communityId}`)
@@ -106,6 +107,7 @@ export function useDashboardRealtime(communityId: string) {
       )
       .subscribe();
     const poll = setInterval(() => {
+      if (isQuietHours()) return; // 深夜帯は定期更新を止める（変化はリアルタイム通知で反映）
       if (document.visibilityState === "visible") qc.invalidateQueries({ queryKey: ["dashboard", communityId] });
     }, 60_000);
     return () => {
