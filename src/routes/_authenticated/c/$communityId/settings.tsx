@@ -61,7 +61,7 @@ function CommunitySettingsPage() {
   const role = membership.data?.role;
   const canManage = role === "owner" || role === "admin";
   const me = useMe();
-  const perms = useMyRolePermissions(communityId, me.data?.id, role);
+  const perms = useMyRolePermissions(communityId, me.data?.id, role ?? undefined);
   const canRoles = perms.has("manage_roles");
 
   if (membership.isLoading) return <LoadingState />;
