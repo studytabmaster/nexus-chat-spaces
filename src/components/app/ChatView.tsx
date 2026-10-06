@@ -283,6 +283,14 @@ export function ChatView({
       if (!me.data) throw new Error("サインインしてください");
       const content = text.trim();
       if (!content && !file) return;
+      // 荒らし対策: 1.5秒以内の連投・同一内容の即時連投をブロック
+      const now = Date.now();
+      const w = window as unknown as { __lastSend?: { t: number; c: string } };
+      const last = w.__lastSend;
+      if (last && (now - last.t < 1500 || (content && content === last.c && now - last.t < 10000))) {
+        throw new Error("送信が速すぎます。少し時間を空けてください");
+      }
+      w.__lastSend = { t: now, c: content };
       let attachment_url: string | null = null;
       let attachment_type: string | null = null;
       if (file) {
