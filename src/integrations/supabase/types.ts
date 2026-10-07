@@ -1960,6 +1960,27 @@ export type Database = {
           },
         ]
       }
+      signup_allowlist: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          email: string
+          note: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          email: string
+          note?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          email?: string
+          note?: string
+        }
+        Relationships: []
+      }
       tasks: {
         Row: {
           assigned_to: string | null
@@ -2193,6 +2214,7 @@ export type Database = {
           valid: boolean
         }[]
       }
+      is_access_allowed: { Args: never; Returns: boolean }
       is_dm_member: {
         Args: { _dm_id: string; _user_id: string }
         Returns: boolean
@@ -2262,6 +2284,13 @@ export type Database = {
           id: string
           status: string
           username: string
+        }[]
+      }
+      staff_users: {
+        Args: never
+        Returns: {
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
         }[]
       }
       start_dm: { Args: { _other: string }; Returns: string }

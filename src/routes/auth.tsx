@@ -34,6 +34,13 @@ function AuthPage() {
   const [username, setUsername] = useState("");
   const [busy, setBusy] = useState(false);
   const [checkEmail, setCheckEmail] = useState(false);
+  const [notInvited, setNotInvited] = useState(false);
+  useEffect(() => {
+    if (sessionStorage.getItem("not_invited")) {
+      sessionStorage.removeItem("not_invited");
+      setNotInvited(true);
+    }
+  }, []);
 
   useEffect(() => {
     if (!loading && session) navigate({ to: "/home", replace: true });
@@ -89,6 +96,11 @@ function AuthPage() {
         <Link to="/" className="mb-8 flex justify-center">
           <Logo />
         </Link>
+        <p className="mb-3 rounded-lg border bg-muted/40 px-3 py-2 text-center text-xs text-muted-foreground">
+          {notInvited
+            ? "このアカウントは招待されていません。運営に登録してもらったメールアドレスで入ってください。"
+            : "招待制です。運営に登録されたメールアドレスのみ利用できます。"}
+        </p>
         <div className="rounded-2xl border bg-card p-6 glow-ring">
           {checkEmail ? (
             <div className="text-center">

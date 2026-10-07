@@ -65,6 +65,7 @@ function AdminPage() {
             <TabsTrigger value="items">Shop商品</TabsTrigger>
             <TabsTrigger value="fraud">不正検知</TabsTrigger>
             <TabsTrigger value="audit">監査ログ</TabsTrigger>
+            <TabsTrigger value="allow">参加許可</TabsTrigger>
           </TabsList>
           <TabsContent value="items" className="mt-4">
             <ItemsManager />
@@ -74,6 +75,9 @@ function AdminPage() {
           </TabsContent>
           <TabsContent value="audit" className="mt-4">
             <AuditPanel />
+          </TabsContent>
+          <TabsContent value="allow" className="mt-4">
+            <AllowlistPanel />
           </TabsContent>
         </Tabs>
       </div>

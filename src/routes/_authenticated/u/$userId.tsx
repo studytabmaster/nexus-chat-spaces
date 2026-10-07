@@ -137,7 +137,7 @@ function ProfilePage() {
             <div className="flex-1 text-center sm:text-left">
               <h1 className="flex flex-wrap items-center justify-center gap-2 text-2xl font-extrabold sm:justify-start">
                 {profile.data.display_name}
-                <NameDecorations title={cosmetic?.title} />
+                <NameDecorations userId={profile.data.id} title={cosmetic?.title} />
               </h1>
               <p className="flex items-center justify-center gap-2 text-muted-foreground sm:justify-start">
                 <AtSign className="size-3.5" /> {profile.data.username}
