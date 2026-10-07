@@ -13,16 +13,25 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 export function EmojiImage({
   emoji,
   className = "inline size-6 align-text-bottom object-contain",
+  big = false,
 }: {
   emoji: { name: string; image_url: string };
   className?: string;
+  /** スタンプなど大きく表示する場合のローディングプレースホルダーサイズ */
+  big?: boolean;
 }) {
   const { data: url, isLoading } = useSignedUrl(emoji.image_url);
   const [hasError, setHasError] = useState(false);
 
   // 1. URL取得中はパルス状の薄いスケルトンを表示してガタつきと空白を防止
   if (isLoading) {
-    return <span className="inline-block size-6 animate-pulse rounded bg-muted/60 align-text-bottom" />;
+    return (
+      <span
+        className={`inline-block ${big ? "h-16 w-16" : "size-6"} animate-pulse rounded bg-muted/60 ${
+          big ? "align-middle" : "align-text-bottom"
+        }`}
+      />
+    );
   }
 
   // 2. 画像が見つからない・読み込み失敗時はテキストバッジをフォールバック表示
