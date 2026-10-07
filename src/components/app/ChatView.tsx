@@ -988,7 +988,7 @@ function Highlight({
                 <EmojiImage
                   key={j}
                   emoji={part}
-                  big={part.big}
+                  big={!!part.big}
                   className={
                     part.big
                       ? "inline h-16 w-16 align-middle object-contain"
