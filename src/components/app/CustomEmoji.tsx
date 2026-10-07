@@ -57,7 +57,7 @@ export function EmojiImage({
 }
 
 /** 日本語・英数字・アンダースコア・ハイフンに対応したトークン置換 */
-export function renderEmojiParts(text: string, emojis: { name: string; image_url: string }[]) {
+export function renderEmojiParts(text: string, emojis: { name: string; image_url: string; big?: boolean }[]) {
   if (!text || emojis.length === 0) return [text];
   const byName = new Map(emojis.map((e) => [e.name, e]));
   
