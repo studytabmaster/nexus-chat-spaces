@@ -551,7 +551,7 @@ export function ChatView({
                     <Link to="/u/$userId" params={{ userId: m.user_id }} className="text-sm font-bold hover:underline">
                       {m.author?.display_name ?? "Unknown"}
                     </Link>
-                    <NameDecorations title={cosmetics[m.user_id]?.title} roles={rolesByUser[m.user_id]} />
+                    <NameDecorations userId={m.user_id} title={cosmetics[m.user_id]?.title} roles={rolesByUser[m.user_id]} />
                     <span className="text-[11px] text-muted-foreground">{chatTime(m.created_at)}</span>
                   </div>
                 )}

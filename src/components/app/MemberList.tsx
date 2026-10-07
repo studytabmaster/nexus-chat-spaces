@@ -43,7 +43,7 @@ export function MemberList({ communityId }: { communityId: string }) {
             />
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium">{m.profile.display_name}</p>
-              <NameDecorations title={cosmetics[m.user_id]?.title} roles={rolesByUser[m.user_id]} max={1} />
+              <NameDecorations userId={m.user_id} title={cosmetics[m.user_id]?.title} roles={rolesByUser[m.user_id]} max={1} />
               <p className="truncate text-[11px] text-muted-foreground">
                 {rolesByUser[m.user_id]?.[0]?.name ?? ROLE_LABEL[m.role]}
               </p>
