@@ -108,13 +108,10 @@ export function useDashboardRealtime(communityId: string) {
         invalidate,
       )
       .subscribe();
-    const poll = setInterval(() => {
-      if (isQuietHours()) return; // 深夜帯は定期更新を止める（変化はリアルタイム通知で反映）
-      if (document.visibilityState === "visible") qc.invalidateQueries({ queryKey: ["dashboard", communityId] });
-    }, 120_000);
+    // 定期更新は廃止（オンライン数は画面を開いた時・変化通知時に再集計）
+    void isQuietHours;
     return () => {
       if (timer) clearTimeout(timer);
-      clearInterval(poll);
       supabase.removeChannel(channel);
     };
   }, [communityId, qc, visible]);
