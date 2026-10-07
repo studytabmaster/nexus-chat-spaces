@@ -182,6 +182,8 @@ export function ChatView({
         id: p.id,
         name: p.item!.payload || p.item!.name,
         image_url: p.item!.image_url!,
+        // スタンプは本文内で大きく表示する
+        big: p.item!.kind === "sticker",
       }));
     return [...customEmojis, ...shopEmojis];
   }, [customEmojis, purchases.data]);
@@ -959,7 +961,7 @@ function Highlight({
   emojis = [],
 }: {
   text: string;
-  emojis?: { name: string; image_url: string }[];
+  emojis?: { name: string; image_url: string; big?: boolean }[];
 }) {
   const parts = text.split(/(@[a-z0-9_]+|https?:\/\/\S+)/gi);
   return (
@@ -980,7 +982,19 @@ function Highlight({
         return (
           <span key={i}>
             {renderEmojiParts(p, emojis).map((part, j) =>
-              typeof part === "string" ? <span key={j}>{part}</span> : <EmojiImage key={j} emoji={part} />,
+              typeof part === "string" ? (
+                <span key={j}>{part}</span>
+              ) : (
+                <EmojiImage
+                  key={j}
+                  emoji={part}
+                  className={
+                    part.big
+                      ? "inline h-16 w-16 align-middle object-contain"
+                      : "inline size-7 align-text-bottom object-contain"
+                  }
+                />
+              ),
             )}
           </span>
         );
