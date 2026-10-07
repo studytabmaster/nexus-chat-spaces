@@ -1,3 +1,4 @@
+import { StaffBadge } from "./StaffBadge";
 import type { CommunityRole } from "@/lib/roles";
 import { cn } from "@/lib/utils";
 
