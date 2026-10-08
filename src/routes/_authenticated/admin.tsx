@@ -665,7 +665,7 @@ function AllowlistPanel() {
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mail)) throw new Error("メールアドレスの形式が正しくありません");
       const { error } = await supabase.from("signup_allowlist").upsert({
         email: mail,
-        note: note.trim() || undefined,
+        note: note.trim(),
         created_by: me.data?.id ?? null,
       });
       if (error) throw error;
