@@ -628,3 +628,128 @@ function AuditPanel() {
     </div>
   );
 }
+
+type AllowlistRow = {
+  email: string;
+  note: string | null;
+  created_by: string | null;
+  created_at: string;
+};
+
+function AllowlistPanel() {
+  const qc = useQueryClient();
+  const me = useMe();
+  const [email, setEmail] = useState("");
+  const [note, setNote] = useState("");
+
+  const rows = useQuery({
+    queryKey: ["signup-allowlist"],
+    queryFn: async (): Promise<AllowlistRow[]> => {
+      const { data, error } = await supabase
+        .from("signup_allowlist")
+        .select("email, note, created_by, created_at")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as AllowlistRow[];
+    },
+  });
+
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ["signup-allowlist"] });
+    qc.invalidateQueries({ queryKey: ["service-audit"] });
+  };
+
+  const add = useMutation({
+    mutationFn: async () => {
+      const mail = email.trim().toLowerCase();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mail)) throw new Error("メールアドレスの形式が正しくありません");
+      const { error } = await supabase.from("signup_allowlist").upsert({
+        email: mail,
+        note: note.trim(),
+        created_by: me.data?.id ?? null,
+      });
+      if (error) throw error;
+      await supabase.from("service_audit_logs").insert({
+        actor_id: me.data?.id ?? null,
+        action: "allowlist_add",
+        target: mail,
+        detail: note.trim(),
+      });
+    },
+    onSuccess: () => {
+      toast.success("参加を許可しました");
+      setEmail("");
+      setNote("");
+      invalidate();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const remove = useMutation({
+    mutationFn: async (mail: string) => {
+      const { error } = await supabase.from("signup_allowlist").delete().eq("email", mail);
+      if (error) throw error;
+      await supabase.from("service_audit_logs").insert({
+        actor_id: me.data?.id ?? null,
+        action: "allowlist_remove",
+        target: mail,
+        detail: "",
+      });
+    },
+    onSuccess: () => {
+      toast.success("削除しました");
+      invalidate();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  return (
+    <div className="space-y-3">
+      <div className="rounded-xl border bg-card p-3">
+        <p className="text-sm font-medium">参加許可の追加</p>
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          ここに登録されたメールアドレスの人だけが新規登録・ログインできます。
+        </p>
+        <div className="mt-2 flex flex-wrap items-end gap-2">
+          <div className="min-w-56 flex-1">
+            <Label className="text-xs">メールアドレス</Label>
+            <Input
+              className="mt-1"
+              type="email"
+              value={email}
+              placeholder="user@example.com"
+              onChange={(e) => setEmail(e.target.value)}
+            />
+          </div>
+          <div className="min-w-40 flex-1">
+            <Label className="text-xs">メモ（任意）</Label>
+            <Input className="mt-1" value={note} onChange={(e) => setNote(e.target.value)} />
+          </div>
+          <Button onClick={() => add.mutate()} disabled={add.isPending}>
+            <Plus className="mr-1 size-4" />
+            追加
+          </Button>
+        </div>
+      </div>
+
+      {rows.isLoading && <LoadingState />}
+      {rows.data?.length === 0 && (
+        <EmptyState icon={ShieldAlert} title="登録がありません" body="メールアドレスを追加すると、その人だけが参加できます。" />
+      )}
+      {rows.data?.map((r) => (
+        <div key={r.email} className="flex flex-wrap items-center gap-3 rounded-xl border bg-card p-3">
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium">{r.email}</p>
+            <p className="text-xs text-muted-foreground">
+              {r.note ? `${r.note} / ` : ""}
+              {chatTime(r.created_at)}に登録
+            </p>
+          </div>
+          <Button size="sm" variant="outline" onClick={() => remove.mutate(r.email)} disabled={remove.isPending}>
+            削除
+          </Button>
+        </div>
+      ))}
+    </div>
+  );
+}
