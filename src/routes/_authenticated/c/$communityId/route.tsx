@@ -5,6 +5,7 @@ import { ChevronDown, FileText, CheckSquare, Settings, Users, BadgeCheck, Menu, 
 import { communityQuery, channelsQuery, membersQuery, type Channel } from "@/lib/queries";
 import { channelPrefsQuery, channelTypeMeta, useSetChannelPref } from "@/lib/channels";
 import { useMe } from "@/lib/auth";
+import { UserAvatar } from "@/components/app/UserAvatar";
 import { useMembership } from "@/components/app/JoinButton";
 import { CommunityIcon } from "@/components/app/CommunityIcon";
 import { WelcomeDialog } from "@/components/app/WelcomeDialog";

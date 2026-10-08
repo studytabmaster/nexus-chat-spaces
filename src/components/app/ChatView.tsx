@@ -457,9 +457,9 @@ export function ChatView({
   return (
     <div className="flex h-full min-h-0 flex-col">
       {!compact && (
-        <header className="flex h-12 shrink-0 items-center gap-2 border-b px-4">
-          {source.kind === "channel" ? <Hash className="size-4 text-muted-foreground" /> : null}
-          <h2 className="truncate font-bold">{title}</h2>
+        <header className="flex h-12 shrink-0 items-center gap-2 border-b border-sidebar-border px-4 shadow-sm">
+          {source.kind === "channel" ? <Hash className="size-5 text-muted-foreground/70" /> : null}
+          <h2 className="truncate font-semibold text-white">{title}</h2>
           {subtitle && <span className="hidden truncate text-sm text-muted-foreground sm:inline">— {subtitle}</span>}
           <div className="flex-1" />
           {source.kind === "channel" && pinned.length > 0 && (
@@ -804,7 +804,7 @@ export function ChatView({
             <Lock className="size-4" /> {postDisabledNote ?? "メッセージを送るにはコミュニティに参加してください"}
           </div>
         ) : (
-          <div className="relative rounded-xl border bg-card focus-within:ring-1 focus-within:ring-ring">
+          <div className="relative rounded-lg bg-input">
             {(replyTo || editing) && (
               <div className="flex items-center gap-2 border-b px-3 py-1.5 text-xs text-muted-foreground">
                 {editing ? <Pencil className="size-3" /> : <Reply className="size-3" />}
