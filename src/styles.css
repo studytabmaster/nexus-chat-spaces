@@ -103,7 +103,7 @@
   --dnd: #da373c;
   --offline: #80848e;
   --verified: #00a8fc;
-  --glow: #5865f2 / 35%;
+  --glow: rgb(88 101 242 / 35%);
   color-scheme: dark;
 }
 
