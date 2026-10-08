@@ -20,7 +20,7 @@ export function NameDecorations({
   if (!title && shown.length === 0 && !userId) return null;
   return (
     <span className={cn("inline-flex flex-wrap items-center gap-1 align-middle", className)}>
-      <StaffBadge userId={userId} />
+      {userId && <StaffBadge userId={userId} />}
       {title && (
         <span
           className="rounded-md border border-primary/40 bg-primary/10 px-1.5 py-[1px] text-[10px] font-medium text-primary"
