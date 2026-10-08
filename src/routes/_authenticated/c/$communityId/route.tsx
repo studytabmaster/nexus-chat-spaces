@@ -5,6 +5,7 @@ import { ChevronDown, FileText, CheckSquare, Settings, Users, BadgeCheck, Menu, 
 import { communityQuery, channelsQuery, membersQuery, type Channel } from "@/lib/queries";
 import { channelPrefsQuery, channelTypeMeta, useSetChannelPref } from "@/lib/channels";
 import { useMe } from "@/lib/auth";
+import { UserAvatar } from "@/components/app/UserAvatar";
 import { useMembership } from "@/components/app/JoinButton";
 import { CommunityIcon } from "@/components/app/CommunityIcon";
 import { WelcomeDialog } from "@/components/app/WelcomeDialog";
@@ -199,8 +200,18 @@ function ChannelSidebar({
           )}
         </div>
       </nav>
-      <div className="border-t px-4 py-2 text-xs text-muted-foreground">
-        <Users className="mr-1 inline size-3" /> {members.data?.length ?? 0} メンバー
+      <div className="flex h-[52px] shrink-0 items-center gap-2 bg-user-panel px-2">
+        <UserAvatar
+          name={me.data?.display_name ?? "?"}
+          avatarUrl={me.data?.avatar_url}
+          status={me.data?.status}
+          showStatus={me.data?.show_online}
+          size="sm"
+        />
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-xs font-bold text-foreground">{me.data?.display_name ?? "…"}</p>
+          <p className="text-[10px] leading-tight text-muted-foreground">{members.data?.length ?? 0} メンバー</p>
+        </div>
       </div>
     </div>
   );
