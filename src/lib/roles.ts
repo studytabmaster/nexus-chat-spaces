@@ -33,6 +33,7 @@ export type MemberRoleLink = {
 export function communityRolesQuery(communityId: string) {
   return queryOptions({
     queryKey: ["community-roles", communityId],
+    staleTime: 15 * 60 * 1000,
     queryFn: async (): Promise<CommunityRole[]> => {
       const { data, error } = await supabase
         .from("community_roles")
@@ -49,6 +50,7 @@ export function communityRolesQuery(communityId: string) {
 export function memberRolesQuery(communityId: string) {
   return queryOptions({
     queryKey: ["community-member-roles", communityId],
+    staleTime: 15 * 60 * 1000,
     queryFn: async (): Promise<MemberRoleLink[]> => {
       const { data, error } = await supabase
         .from("community_member_roles")

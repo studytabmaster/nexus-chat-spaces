@@ -1,0 +1,2 @@
+ALTER TABLE public.messages ADD CONSTRAINT messages_content_len CHECK (char_length(content) <= 2000) NOT VALID;
+ALTER TABLE public.dm_messages ADD CONSTRAINT dm_messages_content_len CHECK (char_length(content) <= 2000) NOT VALID;

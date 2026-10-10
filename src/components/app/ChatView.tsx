@@ -894,7 +894,7 @@ export function ChatView({
                   }
                 />
               )}
-              <Textarea
+              <Textarea maxLength={2000}
                 value={text}
                 onChange={(e) => onChange(e.target.value)}
                 onKeyDown={onKeyDown}
