@@ -204,9 +204,11 @@ export function ChatView({
     let messageTimer: ReturnType<typeof setTimeout> | null = null;
     let sideTimer: ReturnType<typeof setTimeout> | null = null;
 
-    const refetchMessages = () => {
+    const refetchMessages = (payload?: { eventType?: string; new?: { user_id?: string } }) => {
       // タブが裏にある時はSupabaseへのクエリを完全スキップ
       if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+      // 自分の送信は送信直後に反映済みなので再取得しない
+      if (payload?.eventType === "INSERT" && payload.new?.user_id && payload.new.user_id === me.data?.id) return;
 
       if (messageTimer) return;
       messageTimer = setTimeout(() => {
@@ -295,16 +297,17 @@ export function ChatView({
   const send = useMutation({
     mutationFn: async () => {
       if (!me.data) throw new Error("サインインしてください");
-      const content = text.trim();
-      if (!content && !file) return;
-      // 荒らし対策: 1.5秒以内の連投・同一内容の即時連投をブロック
-      const now = Date.now();
-      const w = window as unknown as { __lastSend?: { t: number; c: string } };
-      const last = w.__lastSend;
-      if (last && (now - last.t < 1500 || (content && content === last.c && now - last.t < 10000))) {
-        throw new Error("送信が速すぎます。少し時間を空けてください");
+      const content = sanitizeMessage(text);
+      if (!content && !file) {
+        if (text.trim()) throw new Error("空のメッセージは送れません");
+        return;
       }
-      w.__lastSend = { t: now, c: content };
+      const invalid = validateMessage(content);
+      if (invalid) throw new Error(invalid);
+      if (!editing) {
+        const rate = checkRate(content);
+        if (rate) throw new Error(rate);
+      }
       let attachment_url: string | null = null;
       let attachment_type: string | null = null;
       if (file) {
