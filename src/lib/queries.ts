@@ -66,6 +66,7 @@ export const communityQuery = (id: string) =>
 export const channelsQuery = (communityId: string) =>
   queryOptions({
     queryKey: ["channels", communityId],
+    staleTime: 15 * 60 * 1000,
     queryFn: async () => {
       const [cats, chans] = await Promise.all([
         supabase.from("categories").select("*").eq("community_id", communityId).order("position"),
@@ -80,6 +81,7 @@ export const channelsQuery = (communityId: string) =>
 export const membersQuery = (communityId: string) =>
   queryOptions({
     queryKey: ["members", communityId],
+    staleTime: 15 * 60 * 1000,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("community_members")
