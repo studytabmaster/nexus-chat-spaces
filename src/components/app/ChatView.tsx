@@ -1,3 +1,4 @@
+import { sanitizeMessage, validateMessage, checkRate } from "@/lib/message-guard";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -366,7 +367,7 @@ export function ChatView({
       qc.invalidateQueries({ queryKey: key });
       qc.invalidateQueries({ queryKey: ["thread-stats", filterVal] });
     },
-    onError: () => toast.error("メッセージを送信できませんでした。"),
+    onError: (e) => toast.error(e instanceof Error && /[ぁ-んァ-ン一-龥]/.test(e.message) ? e.message : "メッセージを送信できませんでした。"),
   });
 
   const remove = useMutation({
