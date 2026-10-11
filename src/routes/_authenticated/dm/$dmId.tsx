@@ -7,6 +7,7 @@ import { dmListQuery } from "@/lib/queries";
 import { ChatView } from "@/components/app/ChatView";
 import { UserAvatar } from "@/components/app/UserAvatar";
 import { LoadingState, ErrorState } from "@/components/app/EmptyState";
+import type { Profile } from "@/types";
 
 export const Route = createFileRoute("/_authenticated/dm/$dmId")({
   head: () => ({
@@ -26,30 +27,46 @@ function DmPage() {
   const navigate = useNavigate();
   const dms = useQuery(dmListQuery(me.data?.id ?? ""));
 
+  // 一覧にまだ含まれていない場合の個別相手取得クエリ
+  const singleDm = useQuery({
+    queryKey: ["dm-single", dmId, me.data?.id],
+    enabled: !!me.data?.id && !!dmId && !dms.data?.some((d) => d.dm_id === dmId),
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("dm_members")
+        .select("user_id, profile:profiles(*)")
+        .eq("dm_id", dmId)
+        .neq("user_id", me.data!.id)
+        .maybeSingle();
+      if (error) throw error;
+      return (data?.profile as Profile | null) ?? null;
+    },
+  });
+
   useEffect(() => {
-    if (!me.data || !dmId) return;
-    supabase.from("dm_members").upsert({ dm_id: dmId, user_id: me.data.id, last_read_at: new Date().toISOString() });
-  }, [dmId, me.data]);
+    if (!me.data?.id || !dmId) return;
+    // upsertではなくupdateを使用（dm_membersはupdateポリシーのみ許可されているため）
+    supabase
+      .from("dm_members")
+      .update({ last_read_at: new Date().toISOString() })
+      .eq("dm_id", dmId)
+      .eq("user_id", me.data.id)
+      .then();
+  }, [dmId, me.data?.id]);
 
   if (!me.data) return <LoadingState />;
-  if (dms.isLoading) return <LoadingState />;
+  if (dms.isLoading && singleDm.isLoading) return <LoadingState />;
   if (dms.isError) return <ErrorState message={dms.error.message} onRetry={() => dms.refetch()} />;
 
   const dm = dms.data?.find((d) => d.dm_id === dmId);
-  if (!dm) {
+  const other = dm?.other ?? singleDm.data;
+
+  if (!other) {
+    if (singleDm.isLoading) return <LoadingState />;
     return (
       <div className="flex h-full flex-col items-center justify-center p-8 text-center">
         <p className="font-semibold">DMが見つかりません</p>
         <p className="text-sm text-muted-foreground">一覧から会話を選んでください。</p>
-      </div>
-    );
-  }
-
-  const other = dm.other;
-  if (!other) {
-    return (
-      <div className="flex h-full flex-col items-center justify-center p-8 text-center">
-        <p className="font-semibold">相手が見つかりません</p>
       </div>
     );
   }
