@@ -10,3 +10,4 @@
 <!-- LOVABLE:END -->
 - Quiet-hours throttling lives in src/lib/quiet-hours.ts and realtime channels disconnect while the page is hidden (usePageVisible); avoid unfiltered postgres_changes subscriptions because they fan out to every subscriber.
 - Community permissions are checked in DB via has_community_perm(); custom roles can only grant permissions the creator holds (trigger guard).
+- Third-party sidebar ads use sandboxed srcdoc iframes without same-origin or top-navigation privileges, load only when visible in sufficiently wide desktop member panels, and never mount in mobile sheets; this protects session data and keeps chat controls unobstructed.

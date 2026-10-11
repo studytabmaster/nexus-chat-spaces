@@ -73,8 +73,8 @@ function CommunityLayout() {
         </div>
       </div>
 
-      <aside className={cn("hidden w-60 shrink-0 border-l bg-sidebar", isChat ? "xl:block" : "md:block")}>
-        <MemberList communityId={communityId} />
+      <aside className={cn("hidden w-60 shrink-0 border-l bg-sidebar 2xl:w-80", isChat ? "xl:block" : "md:block")}>
+        <MemberList communityId={communityId} showAds />
       </aside>
       <Sheet open={rightOpen} onOpenChange={setRightOpen}>
         <SheetContent side="right" className="w-64 p-0">

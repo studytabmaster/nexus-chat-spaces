@@ -7,8 +7,9 @@ import { ROLE_LABEL } from "@/lib/constants";
 import { LoadingState } from "./EmptyState";
 import { useCosmetics } from "@/lib/cosmetics";
 import { groupMemberRoles, memberRolesQuery } from "@/lib/roles";
+import { SidebarAds } from "./SidebarAds";
 
-export function MemberList({ communityId }: { communityId: string }) {
+export function MemberList({ communityId, showAds = false }: { communityId: string; showAds?: boolean }) {
   const members = useQuery(membersQuery(communityId));
   const memberRoles = useQuery(memberRolesQuery(communityId));
   const list = members.data ?? [];
@@ -57,6 +58,7 @@ export function MemberList({ communityId }: { communityId: string }) {
     <div className="h-full overflow-y-auto p-2">
       <Group title="オンライン" items={online} />
       <Group title="オフライン" items={offline} />
+      {showAds && <SidebarAds />}
     </div>
   );
 }
