@@ -1,18 +1,26 @@
 import { queryOptions, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
-/** カスタムロールで設定できる権限 */
-export const ROLE_PERMISSIONS: { key: string; label: string; description: string }[] = [
-  { key: "manage_channels", label: "チャンネル管理", description: "チャンネルやカテゴリーの作成・編集・削除" },
-  { key: "manage_messages", label: "メッセージ管理", description: "他のメンバーのメッセージの削除・ピン留め" },
-  { key: "manage_events", label: "イベント管理", description: "イベントや投票の作成・編集" },
-  { key: "manage_members", label: "メンバー管理", description: "警告・タイムアウト・キック・BAN" },
-  { key: "manage_roles", label: "ロール管理", description: "ロールの作成・編集とメンバーへの付与" },
-  { key: "mention_everyone", label: "全員メンション", description: "@everyone / @here を使える" },
-  { key: "view_audit_log", label: "監査ログの閲覧", description: "コミュニティの操作履歴を見られる" },
+export type RolePermissionKey =
+  | "manage_channels"
+  | "manage_messages"
+  | "manage_events"
+  | "manage_members"
+  | "manage_roles"
+  | "mention_everyone"
+  | "view_audit_log";
+
+export const ROLE_PERMISSIONS: { key: RolePermissionKey; label: string; description: string }[] = [
+  { key: "manage_channels", label: "チャンネル管理", description: "チャンネルの作成・編集・削除" },
+  { key: "manage_messages", label: "メッセージ管理", description: "他者のメッセージ削除やピン留め" },
+  { key: "manage_events", label: "イベント管理", description: "コミュニティイベントの作成・編集" },
+  { key: "manage_members", label: "メンバー管理", description: "キック・BAN・タイムアウトの実行" },
+  { key: "manage_roles", label: "ロール管理", description: "ロールの作成・編集・メンバーへの付与" },
+  { key: "mention_everyone", label: "@everyone メンション", description: "全員宛ての通知を送信" },
+  { key: "view_audit_log", label: "監査ログ閲覧", description: "モデレーションログの確認" },
 ];
 
-export type CommunityRole = {
+export interface CommunityRole {
   id: string;
   community_id: string;
   name: string;
@@ -21,14 +29,15 @@ export type CommunityRole = {
   position: number;
   permissions: string[];
   created_at: string;
-};
+}
 
-export type MemberRoleLink = {
+export interface MemberRoleLink {
   id: string;
+  community_id: string;
   role_id: string;
   user_id: string;
-  role: CommunityRole | null;
-};
+  role?: CommunityRole;
+}
 
 export function communityRolesQuery(communityId: string) {
   return queryOptions({
@@ -54,7 +63,7 @@ export function memberRolesQuery(communityId: string) {
     queryFn: async (): Promise<MemberRoleLink[]> => {
       const { data, error } = await supabase
         .from("community_member_roles")
-        .select("id, role_id, user_id, role:community_roles(*)")
+        .select("id, community_id, role_id, user_id, role:community_roles(*)")
         .eq("community_id", communityId);
       if (error) throw error;
       return (data ?? []) as unknown as MemberRoleLink[];
@@ -115,6 +124,7 @@ export function useRoleAdmin(communityId: string) {
         const { error } = await supabase
           .from("community_member_roles")
           .delete()
+          .eq("community_id", communityId)
           .eq("role_id", roleId)
           .eq("user_id", userId);
         if (error) throw error;
