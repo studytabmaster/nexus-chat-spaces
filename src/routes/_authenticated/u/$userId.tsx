@@ -59,15 +59,10 @@ function ProfilePage() {
         if (commonError) throw commonError;
         if (common?.length && common[0]?.dm_id) return common[0].dm_id;
       }
-      const { data: dm, error: createError } = await supabase.from("dms").insert({}).select("id").single();
-      if (!dm?.id) throw new Error("DMの作成に失敗しました");
+      const { data: newId, error: createError } = await supabase.rpc("start_dm", { _other: userId });
       if (createError) throw createError;
-      const { error: memberError } = await supabase.from("dm_members").insert([
-        { dm_id: dm.id, user_id: me.data!.id },
-        { dm_id: dm.id, user_id: userId },
-      ]);
-      if (memberError) throw memberError;
-      return dm.id;
+      if (!newId) throw new Error("DMの作成に失敗しました");
+      return newId as string;
     },
     onSuccess: (dmId) => {
       qc.invalidateQueries({ queryKey: ["dms", me.data?.id] });

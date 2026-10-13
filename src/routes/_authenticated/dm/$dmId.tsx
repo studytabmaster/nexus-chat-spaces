@@ -28,7 +28,7 @@ function DmPage() {
 
   useEffect(() => {
     if (!me.data || !dmId) return;
-    supabase.from("dm_members").upsert({ dm_id: dmId, user_id: me.data.id, last_read_at: new Date().toISOString() });
+    supabase.from("dm_members").update({ last_read_at: new Date().toISOString() }).eq("dm_id", dmId).eq("user_id", me.data.id).then();
   }, [dmId, me.data]);
 
   if (!me.data) return <LoadingState />;
