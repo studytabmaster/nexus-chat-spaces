@@ -101,3 +101,29 @@ export function SidebarAds() {
     </section>
   );
 }
+// Fixed ad under the chat area for screens where the side panel ads are hidden.
+export function BottomAd() {
+  const [dismissed, setDismissed] = useState(false);
+  const [gone, setGone] = useState(false);
+  useEffect(() => {
+    try { setDismissed(sessionStorage.getItem("nexa:bottom-ad-hidden") === "1"); } catch { /* ignore */ }
+  }, []);
+  const onUnavailable = useCallback(() => setGone(true), []);
+  if (dismissed || gone) return null;
+  const unit = units[0];
+  return (
+    <div className="relative flex shrink-0 justify-center border-t bg-sidebar py-1 2xl:hidden" aria-label="広告">
+      <span className="absolute left-2 top-1 text-[10px] text-muted-foreground">広告</span>
+      <Button
+        variant="ghost"
+        size="icon"
+        className="absolute right-1 top-1 size-6"
+        aria-label="広告を閉じる"
+        onClick={() => { setDismissed(true); try { sessionStorage.setItem("nexa:bottom-ad-hidden", "1"); } catch { /* ignore */ } }}
+      >
+        <X className="size-3.5" />
+      </Button>
+      <AdUnit {...unit} onUnavailable={onUnavailable} />
+    </div>
+  );
+}

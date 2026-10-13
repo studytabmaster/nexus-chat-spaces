@@ -10,6 +10,7 @@ import { useMembership } from "@/components/app/JoinButton";
 import { CommunityIcon } from "@/components/app/CommunityIcon";
 import { WelcomeDialog } from "@/components/app/WelcomeDialog";
 import { MemberList } from "@/components/app/MemberList";
+import { BottomAd } from "@/components/app/SidebarAds";
 import { LoadingState, ErrorState, EmptyState } from "@/components/app/EmptyState";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu";
@@ -71,6 +72,7 @@ function CommunityLayout() {
         <div className="min-h-0 flex-1">
           <Outlet />
         </div>
+        <BottomAd />
       </div>
 
       <aside className={cn("hidden w-60 shrink-0 border-l bg-sidebar 2xl:w-80", isChat ? "xl:block" : "md:block")}>
