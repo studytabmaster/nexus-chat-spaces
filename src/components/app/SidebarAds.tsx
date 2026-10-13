@@ -8,7 +8,7 @@ const units = [
   { slot: 4, id: "e32f13c8e16dce725d86f39b7bb236ee" },
 ] as const;
 
-function AdUnit({ slot, id, onUnavailable }: (typeof units)[number] & { onUnavailable: (id: string) => void }) {
+export function AdUnit({ slot, id, onUnavailable }: (typeof units)[number] & { onUnavailable: (id: string) => void }) {
   const ref = useRef<HTMLDivElement>(null);
   const frameRef = useRef<HTMLIFrameElement>(null);
   const [visible, setVisible] = useState(false);
