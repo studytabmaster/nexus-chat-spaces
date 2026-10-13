@@ -1,37 +1,20 @@
-import { createFileRoute, Link, Outlet, useLocation } from "@tanstack/react-router";
+import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import {
-  Hash,
-  Volume2,
-  Settings,
-  Plus,
-  Home,
-  FileText,
-  CalendarDays,
-  CalendarRange,
-  ImageIcon,
-  BadgeCheck,
-  ChevronDown,
-  Menu,
-  PanelRight,
-  Star,
-  BellOff,
-  CheckSquare,
-} from "lucide-react";
-import { channelsQuery, communityQuery, membersQuery } from "@/lib/queries";
-import { useMe, useMembership } from "@/lib/auth";
-import { useSetChannelPref, channelPrefsQuery } from "@/lib/social";
-import { useMyRolePermissions } from "@/lib/roles";
-import { Button } from "@/components/ui/button";
-import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import { ChevronDown, FileText, CheckSquare, Settings, Users, BadgeCheck, Menu, PanelRight, Home, CalendarDays, CalendarRange, ImageIcon, Star, Bell, BellOff, Lock, Archive, Plus } from "lucide-react";
+import { communityQuery, channelsQuery, membersQuery, type Channel } from "@/lib/queries";
+import { channelPrefsQuery, channelTypeMeta, useSetChannelPref } from "@/lib/channels";
+import { useMe } from "@/lib/auth";
 import { UserAvatar } from "@/components/app/UserAvatar";
-import { MemberList } from "@/components/app/MemberList";
+import { useMembership } from "@/components/app/JoinButton";
 import { CommunityIcon } from "@/components/app/CommunityIcon";
 import { WelcomeDialog } from "@/components/app/WelcomeDialog";
-import { channelTypeMeta } from "@/lib/constants";
+import { MemberList } from "@/components/app/MemberList";
+import { LoadingState, ErrorState, EmptyState } from "@/components/app/EmptyState";
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import type { Channel } from "@/types";
 
 export const Route = createFileRoute("/_authenticated/c/$communityId")({
   component: CommunityLayout,
@@ -41,32 +24,29 @@ function CommunityLayout() {
   const { communityId } = Route.useParams();
   const community = useQuery(communityQuery(communityId));
   const membership = useMembership(communityId);
-  const me = useMe();
   const [leftOpen, setLeftOpen] = useState(false);
   const [rightOpen, setRightOpen] = useState(false);
-  const pathname = useLocation({ select: (s) => s.pathname });
-  const isChat = pathname.includes("/ch/");
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const isChat = /\/ch\//.test(pathname);
 
-  const role = membership.data?.role;
+  if (community.isLoading) return <LoadingState />;
+  if (community.isError) return <ErrorState message={community.error.message} onRetry={() => community.refetch()} />;
+  if (!community.data)
+    return (
+      <div className="p-8">
+        <EmptyState icon={Users} title="コミュニティが見つかりません" body="非公開か、削除された可能性があります。" />
+      </div>
+    );
+
+  const role = membership.data?.role ?? null;
   const canManage = role === "owner" || role === "admin";
-  const perms = useMyRolePermissions(communityId, me.data?.id, role ?? undefined);
-  const canRoles = perms.has("manage_roles");
-
-  if (!community.data) return null;
 
   const sidebar = (
-    <ChannelSidebar
-      communityId={communityId}
-      name={community.data.name}
-      verified={community.data.is_verified}
-      canManage={canManage || canRoles}
-      isMember={!!role}
-      onNavigate={() => setLeftOpen(false)}
-    />
+    <ChannelSidebar communityId={communityId} name={community.data.name} verified={community.data.is_verified} canManage={canManage} isMember={!!role} onNavigate={() => setLeftOpen(false)} />
   );
 
   return (
-    <div className="flex h-full min-w-0 flex-1 overflow-hidden">
+    <div className="flex h-full min-h-0">
       {!!role && <WelcomeDialog communityId={communityId} communityName={community.data.name} />}
       <aside className="hidden w-60 shrink-0 border-r bg-sidebar lg:block">{sidebar}</aside>
       <Sheet open={leftOpen} onOpenChange={setLeftOpen}>
@@ -93,8 +73,8 @@ function CommunityLayout() {
         </div>
       </div>
 
-      <aside className={cn("hidden w-60 shrink-0 border-l bg-sidebar", isChat ? "xl:block" : "md:block")}>
-        <MemberList communityId={communityId} />
+      <aside className={cn("hidden w-60 shrink-0 border-l bg-sidebar 2xl:w-80", isChat ? "xl:block" : "md:block")}>
+        <MemberList communityId={communityId} showAds />
       </aside>
       <Sheet open={rightOpen} onOpenChange={setRightOpen}>
         <SheetContent side="right" className="w-64 p-0">
@@ -261,46 +241,75 @@ function ChannelLink({
       params={{ communityId, channelId: channel.id }}
       onClick={onClick}
       className={cn(
-        "group flex items-center gap-2 rounded-md px-2 py-1.5 text-muted-foreground hover:bg-sidebar-accent hover:text-foreground",
+        "flex items-center gap-1.5 rounded-md px-2 py-1.5 text-muted-foreground hover:bg-sidebar-accent hover:text-foreground",
         muted && "opacity-50",
       )}
-      activeProps={{ className: "bg-sidebar-accent text-foreground font-semibold" }}
+      activeProps={{ className: "bg-sidebar-accent text-foreground font-medium" }}
     >
-      <Icon className="size-4 shrink-0 text-muted-foreground group-hover:text-foreground" />
+      <Icon className="size-4 shrink-0 opacity-60" />
       <span className="truncate">{channel.name}</span>
-      {muted && <BellOff className="ml-auto size-3 shrink-0 text-muted-foreground" />}
+      {channel.archived ? (
+        <Archive className="ml-auto size-3 shrink-0 opacity-60" />
+      ) : channel.locked ? (
+        <Lock className="ml-auto size-3 shrink-0 opacity-60" />
+      ) : muted ? (
+        <BellOff className="ml-auto size-3 shrink-0 opacity-60" />
+      ) : favorite ? (
+        <Star className="ml-auto size-3 shrink-0 opacity-60" />
+      ) : null}
     </Link>
   );
 
-  return link;
+  if (!canTogglePrefs) return link;
+
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger asChild>{link}</ContextMenuTrigger>
+      <ContextMenuContent className="w-52">
+        <ContextMenuItem onSelect={() => onTogglePref({ favorite: !favorite })}>
+          <Star className="mr-2 size-4" /> {favorite ? "お気に入りから外す" : "お気に入りに追加"}
+        </ContextMenuItem>
+        <ContextMenuItem onSelect={() => onTogglePref({ muted: !muted })}>
+          {muted ? <Bell className="mr-2 size-4" /> : <BellOff className="mr-2 size-4" />}
+          {muted ? "通知をオンにする" : "このチャンネルをミュート"}
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
+  );
 }
 
 function SideLink({
   to,
   params,
-  exact,
   icon: Icon,
   label,
+  exact,
   onClick,
 }: {
-  to: string;
-  params: Record<string, string>;
-  exact?: boolean;
+  to:
+    | "/c/$communityId"
+    | "/c/$communityId/posts"
+    | "/c/$communityId/tasks"
+    | "/c/$communityId/settings"
+    | "/c/$communityId/events"
+    | "/c/$communityId/media"
+    | "/c/$communityId/calendar";
+  params: { communityId: string };
   icon: typeof Home;
   label: string;
+  exact?: boolean;
   onClick: () => void;
 }) {
   return (
     <Link
       to={to}
       params={params}
-      activeOptions={{ exact }}
       onClick={onClick}
+      activeOptions={{ exact: !!exact }}
       className="flex items-center gap-2 rounded-md px-2 py-1.5 text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"
-      activeProps={{ className: "bg-sidebar-accent text-foreground font-semibold" }}
+      activeProps={{ className: "bg-sidebar-accent text-foreground font-medium" }}
     >
-      <Icon className="size-4 shrink-0" />
-      <span className="truncate">{label}</span>
+      <Icon className="size-4" /> {label}
     </Link>
   );
 }
