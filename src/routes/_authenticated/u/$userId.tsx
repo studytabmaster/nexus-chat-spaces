@@ -47,12 +47,22 @@ function ProfilePage() {
 
   const startDm = useMutation({
     mutationFn: async () => {
-      if (!me.data?.id) throw new Error("ログインが必要です");
-      if (me.data.id === userId) throw new Error("自分自身にはDMを送れません");
-      const { data: dmId, error } = await supabase.rpc("start_dm", { _other: userId });
-      if (error) throw error;
-      if (!dmId) throw new Error("DMの作成に失敗しました");
-      return dmId as string;
+      const { data: myDms, error: myError } = await supabase.from("dm_members").select("dm_id").eq("user_id", me.data!.id);
+      if (myError) throw myError;
+      const myIds = myDms.map((d) => d.dm_id);
+      if (myIds.length) {
+        const { data: common, error: commonError } = await supabase
+          .from("dm_members")
+          .select("dm_id")
+          .eq("user_id", userId)
+          .in("dm_id", myIds);
+        if (commonError) throw commonError;
+        if (common?.length && common[0]?.dm_id) return common[0].dm_id;
+      }
+      const { data: newId, error: createError } = await supabase.rpc("start_dm", { _other: userId });
+      if (createError) throw createError;
+      if (!newId) throw new Error("DMの作成に失敗しました");
+      return newId as string;
     },
     onSuccess: (dmId) => {
       qc.invalidateQueries({ queryKey: ["dms", me.data?.id] });
@@ -97,6 +107,7 @@ function ProfilePage() {
                     </Button>
                   }
                 />
+
               </div>
             )
           }
@@ -104,131 +115,114 @@ function ProfilePage() {
 
         <div className="overflow-hidden rounded-2xl border bg-card">
           <CosmeticBanner
-            preset={cosmetic?.background}
-            customImageUrl={cosmetic?.background_image}
-            className="h-32 md:h-40"
+            background={cosmetic?.background}
+            backgroundImage={cosmetic?.background_image}
+            className="h-24"
           />
-          <div className="relative px-6 pb-6">
-            <div className="-mt-12 mb-4 flex items-end justify-between">
-              <div className="rounded-full bg-card p-1.5 ring-4 ring-card">
-                <UserAvatar
-                  name={profile.data.display_name}
-                  avatarUrl={profile.data.avatar_url}
-                  size="xl"
-                  showStatus={profile.data.show_online}
-                  status={profile.data.status}
-                  frame={cosmetic?.frame}
-                  frameImage={cosmetic?.frame_image}
-                />
-              </div>
-              <Badge variant="outline" className="text-xs">
-                {STATUS_LABEL[profile.data.status] ?? profile.data.status}
-              </Badge>
+          <div className={cn("flex flex-col items-center gap-4 p-6 sm:flex-row sm:items-start", cosmeticBg && "-mt-10")}>
+            <UserAvatar
+              name={profile.data.display_name}
+              avatarUrl={profile.data.avatar_url}
+              showStatus={profile.data.show_online}
+              status={profile.data.status}
+              size="xl"
+              frame={cosmetic?.frame}
+              frameImage={cosmetic?.frame_image}
+            />
+            <div className="flex-1 text-center sm:text-left">
+              <h1 className="flex flex-wrap items-center justify-center gap-2 text-2xl font-extrabold sm:justify-start">
+                {profile.data.display_name}
+                <NameDecorations userId={profile.data.id} title={cosmetic?.title} />
+              </h1>
+              <p className="flex items-center justify-center gap-2 text-muted-foreground sm:justify-start">
+                <AtSign className="size-3.5" /> {profile.data.username}
+              </p>
+              <p className="mt-1 flex items-center justify-center gap-1 text-xs text-muted-foreground sm:justify-start">
+                <Calendar className="size-3" /> 登録日 {shortDate(profile.data.created_at)}
+              </p>
+              <UserBadges userId={userId} />
+              {profile.data.show_online && (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {STATUS_LABEL[profile.data.status] ?? profile.data.status}
+                  {profile.data.custom_status ? ` ・ ${profile.data.custom_status}` : ""}
+                </p>
+              )}
+              {profile.data.bio && <p className="mt-4 whitespace-pre-wrap text-sm leading-relaxed">{profile.data.bio}</p>}
             </div>
-
-            <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-2xl font-bold">{profile.data.display_name}</h2>
-              <NameDecorations userId={userId} title={cosmetic?.title} />
-            </div>
-            <p className="flex items-center gap-1 text-sm text-muted-foreground">
-              <AtSign className="size-3.5" />
-              {profile.data.username}
-            </p>
-
-            {profile.data.custom_status && (
-              <p className="mt-2 text-sm italic text-foreground/80">“{profile.data.custom_status}”</p>
-            )}
-
-            {profile.data.bio && <p className="mt-4 whitespace-pre-wrap text-sm">{profile.data.bio}</p>}
-
-            <div className="mt-4 flex flex-wrap gap-4 text-xs text-muted-foreground">
-              <span className="flex items-center gap-1">
-                <Calendar className="size-3.5" />
-                {shortDate(profile.data.created_at)} に登録
-              </span>
-            </div>
-
-            <UserBadgesSection userId={userId} />
           </div>
         </div>
 
-        <div className="mt-6">
-          <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-            共通のコミュニティ ({common.length})
-          </h3>
-          {common.length === 0 ? (
-            <p className="text-sm text-muted-foreground">共通のコミュニティはありません。</p>
-          ) : (
-            <div className="grid gap-2 sm:grid-cols-2">
-              {common.map((c) => (
-                <Link
-                  key={c.id}
-                  to="/c/$communityId"
-                  params={{ communityId: c.id }}
-                  className="flex items-center gap-3 rounded-xl border bg-card p-3 hover:bg-surface-hover"
-                >
-                  <CommunityIcon id={c.id} name={c.name} iconUrl={c.icon_url} />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate font-semibold">{c.name}</p>
-                    <p className="truncate text-xs text-muted-foreground">{c.member_count} メンバー</p>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          )}
-        </div>
+        <section className="mt-6">
+          <h2 className="mb-3 text-sm font-bold uppercase tracking-wide text-muted-foreground">参加中のコミュニティ</h2>
+          {common.length === 0 && <p className="text-sm text-muted-foreground">共通のコミュニティはありません</p>}
+          <div className="grid gap-2 sm:grid-cols-2">
+            {common.map((c) => (
+              <Link
+                key={c.id}
+                to="/c/$communityId"
+                params={{ communityId: c.id }}
+                className="flex items-center gap-3 rounded-xl border bg-card p-3 hover:bg-surface-hover"
+              >
+                <CommunityIcon id={c.id} name={c.name} iconUrl={c.icon_url} className="size-10 text-base" />
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium">{c.name}</p>
+                  <Badge variant="secondary" className="text-xs">
+                    {c.role}
+                  </Badge>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </section>
       </div>
     </div>
   );
 }
 
-function UserBadgesSection({ userId }: { userId: string }) {
+function FriendButton({ userId }: { userId: string }) {
+  const { relationWith, request, setStatus, remove } = useFriends();
+  const rel = relationWith(userId);
+
+  if (!rel)
+    return (
+      <Button variant="secondary" onClick={() => request.mutate(userId)} disabled={request.isPending}>
+        <UserPlus className="mr-1 size-4" /> フレンド申請を送る
+      </Button>
+    );
+  if (rel.status === "accepted")
+    return (
+      <Button variant="secondary" onClick={() => remove.mutate(rel.id)}>
+        <Check className="mr-1 size-4" /> フレンド
+      </Button>
+    );
+  if (rel.status === "blocked")
+    return (
+      <Button variant="secondary" onClick={() => setStatus.mutate({ id: rel.id, status: "accepted" })}>
+        ブロック解除
+      </Button>
+    );
+  const incoming = rel.addressee_id !== rel.requester_id && rel.requester_id === userId;
+  return incoming ? (
+    <Button onClick={() => setStatus.mutate({ id: rel.id, status: "accepted" })}>
+      <Check className="mr-1 size-4" /> 申請を承認
+    </Button>
+  ) : (
+    <Button variant="secondary" disabled>
+      <Clock className="mr-1 size-4" /> 申請中
+    </Button>
+  );
+}
+
+function UserBadges({ userId }: { userId: string }) {
   const badges = useQuery(userBadgesQuery(userId));
-  if (!badges.data || badges.data.length === 0) return null;
+  if (!badges.data?.length) return null;
   return (
-    <div className="mt-4 flex flex-wrap gap-1.5 border-t pt-4">
+    <div className="mt-2 flex flex-wrap gap-1.5">
       {badges.data.map((b) => (
-        <UiBadge
-          key={b.badge_id}
-          variant="outline"
-          className="gap-1 border-primary/40 bg-primary/10 text-xs"
-          title={b.badge.description ?? undefined}
-        >
-          <span>{b.badge.icon}</span>
-          <span>{b.badge.name}</span>
+        <UiBadge key={b.id} variant="secondary" className="rounded-md font-normal" title={b.description}>
+          {b.name}
         </UiBadge>
       ))}
     </div>
   );
-}
-
-function FriendButton({ userId }: { userId: string }) {
-  const { list, send, setStatus, remove } = useFriends();
-  const friend = list.data?.find((f) => f.requester_id === userId || f.addressee_id === userId);
-
-  if (!friend) {
-    return (
-      <Button onClick={() => send.mutate(userId)} disabled={send.isPending} size="sm">
-        <UserPlus className="mr-1 size-4" /> フレンド申請
-      </Button>
-    );
-  }
-
-  if (friend.status === "accepted") {
-    return (
-      <Button variant="secondary" size="sm" onClick={() => remove.mutate(friend.id)}>
-        <Check className="mr-1 size-4" /> フレンド
-      </Button>
-    );
-  }
-
-  if (friend.status === "pending") {
-    return (
-      <Button variant="secondary" size="sm" disabled>
-        <Clock className="mr-1 size-4" /> 申請中
-      </Button>
-    );
-  }
-
-  return null;
 }
