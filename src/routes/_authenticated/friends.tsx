@@ -1,6 +1,9 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import { Users, Check, X, Ban, UserMinus } from "lucide-react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { Users, Check, X, Ban, UserMinus, MessageCircle } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 import { PageHeader } from "@/components/app/PageHeader";
 import { EmptyState, ErrorState, LoadingState } from "@/components/app/EmptyState";
 import { UserAvatar } from "@/components/app/UserAvatar";
@@ -24,6 +27,20 @@ export const Route = createFileRoute("/_authenticated/friends")({
 function FriendsPage() {
   const { userId, list, setStatus, remove } = useFriends();
   const [tab, setTab] = useState("online");
+  const qc = useQueryClient();
+  const navigate = useNavigate();
+  const startDm = useMutation({
+    mutationFn: async (other: string) => {
+      const { data, error } = await supabase.rpc("start_dm", { _other: other });
+      if (error) throw error;
+      return data as string;
+    },
+    onSuccess: (dmId) => {
+      qc.invalidateQueries({ queryKey: ["dms"] });
+      navigate({ to: "/dm/$dmId", params: { dmId } });
+    },
+    onError: (e) => toast.error(`DMを開けませんでした：${e.message}`),
+  });
 
   const all = list.data ?? [];
   const accepted = all.filter((f) => f.status === "accepted");
@@ -98,6 +115,9 @@ function FriendsPage() {
                   )}
                   {f.status === "accepted" && (
                     <>
+                      <Button size="sm" onClick={() => startDm.mutate(p.id)} disabled={startDm.isPending}>
+                        <MessageCircle className="mr-1 size-4" /> DM
+                      </Button>
                       <Button size="sm" variant="ghost" aria-label="ブロック" onClick={() => setStatus.mutate({ id: f.id, status: "blocked" })}>
                         <Ban className="size-4" />
                       </Button>

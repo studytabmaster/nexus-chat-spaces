@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { useMe } from "@/lib/auth";
+import { useMe, type Profile } from "@/lib/auth";
 import { dmListQuery } from "@/lib/queries";
 import { ChatView } from "@/components/app/ChatView";
 import { UserAvatar } from "@/components/app/UserAvatar";
@@ -25,6 +25,21 @@ function DmPage() {
   const me = useMe();
   const navigate = useNavigate();
   const dms = useQuery(dmListQuery(me.data?.id ?? ""));
+  const inList = dms.data?.find((d) => d.dm_id === dmId);
+  const single = useQuery({
+    queryKey: ["dm-single", dmId, me.data?.id],
+    enabled: !!me.data && !!dms.data && !inList,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("dm_members")
+        .select("user_id, profile:profiles(*)")
+        .eq("dm_id", dmId)
+        .neq("user_id", me.data!.id)
+        .maybeSingle();
+      if (error) throw error;
+      return (data?.profile ?? null) as Profile | null;
+    },
+  });
 
   useEffect(() => {
     if (!me.data || !dmId) return;
@@ -32,20 +47,10 @@ function DmPage() {
   }, [dmId, me.data]);
 
   if (!me.data) return <LoadingState />;
-  if (dms.isLoading) return <LoadingState />;
+  if (dms.isLoading || single.isLoading) return <LoadingState />;
   if (dms.isError) return <ErrorState message={dms.error.message} onRetry={() => dms.refetch()} />;
 
-  const dm = dms.data?.find((d) => d.dm_id === dmId);
-  if (!dm) {
-    return (
-      <div className="flex h-full flex-col items-center justify-center p-8 text-center">
-        <p className="font-semibold">DMが見つかりません</p>
-        <p className="text-sm text-muted-foreground">一覧から会話を選んでください。</p>
-      </div>
-    );
-  }
-
-  const other = dm.other;
+  const other = inList?.other ?? single.data ?? null;
   if (!other) {
     return (
       <div className="flex h-full flex-col items-center justify-center p-8 text-center">
