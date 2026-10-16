@@ -222,11 +222,13 @@ export function MemberManagePanel({
           <AlertDialogFooter>
             <AlertDialogCancel>キャンセル</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => {
-                if (!confirm) return;
-                if (confirm.title.startsWith("オーナー")) transfer.mutate();
-                else act.mutate(confirm.action);
+              onClick={(e) => {
+                e.preventDefault();
+                const c = confirm;
                 setConfirm(null);
+                if (!c) return;
+                if (c.title.startsWith("オーナー")) transfer.mutate();
+                else act.mutate(c.action);
               }}
             >
               実行する
